@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
 import { MapPin, List, Bell, TrendingUp, Trash2, AlertCircle, RefreshCw, X, Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
+
+// Auto-refresh every 30 seconds
+const AUTO_REFRESH_INTERVAL = 30_000;
 
 const DustbinMap = dynamic(() => import("@/components/dashboard/DustbinMap"), {
   ssr: false,
@@ -80,6 +83,9 @@ export default function DashboardPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"map" | "list" | "notifications">("map");
+  const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDashboardData = useCallback(async () => {
     if (!session?.user) return;
@@ -100,6 +106,37 @@ export default function DashboardPage() {
   }, [session]);
 
   useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
+
+  // Auto-refresh every 30 seconds + countdown display
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const startAutoRefresh = () => {
+      // Reset countdown
+      setCountdown(AUTO_REFRESH_INTERVAL / 1000);
+
+      // Countdown ticker
+      countdownRef.current = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) return AUTO_REFRESH_INTERVAL / 1000;
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Data refresh
+      intervalRef.current = setInterval(() => {
+        fetchDashboardData();
+        setCountdown(AUTO_REFRESH_INTERVAL / 1000);
+      }, AUTO_REFRESH_INTERVAL);
+    };
+
+    startAutoRefresh();
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [session?.user, fetchDashboardData]);
 
   const handleDeleteNotification = async (id: number) => {
     const token = localStorage.getItem("bearer_token");
@@ -176,12 +213,12 @@ export default function DashboardPage() {
           </p>
         </div>
         <button
-          onClick={fetchDashboardData}
+          onClick={() => { fetchDashboardData(); setCountdown(AUTO_REFRESH_INTERVAL / 1000); }}
           disabled={loading}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-muted hover:bg-accent transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Refreshing..." : "Refresh"}
+          {loading ? "Refreshing..." : `Refresh (${countdown}s)`}
         </button>
       </div>
 
