@@ -74,6 +74,7 @@ export const userProfile = sqliteTable('user_profile', {
   organizationName: text('organization_name').notNull(),
   category: text('category').notNull(),
   mobileNumber: text('mobile_number').notNull(),
+  plan: text('plan').notNull().default('free'), // "free" | "standard" | "enterprise"
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

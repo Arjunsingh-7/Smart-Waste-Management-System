@@ -1,831 +1,593 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap, Popup } from "react-leaflet";
+import {
+  MapContainer, TileLayer, Marker, useMapEvents, useMap, Popup,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Navigation, MapPin, X, Layers, Maximize2, Minimize2, ZoomIn, ZoomOut, CircleDot, StopCircle } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Search, Navigation, MapPin, X, Layers, Maximize2, Minimize2,
+  CircleDot, StopCircle, CheckCircle2,
+} from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
+/* ── Types ─────────────────────────────────────────────────────────────── */
 interface MapLocationPickerProps {
   latitude: string;
   longitude: string;
   onLocationSelect: (lat: string, lng: string, locationName?: string) => void;
 }
 
-// Map layer configurations
+interface Suggestion {
+  name: string;
+  lat: number;
+  lng: number;
+  source: "custom" | "osm";
+  detail?: string;
+}
+
+/* ── Custom locations dataset (internal / campus locations) ─────────────
+   Add your own locations here — they are searched first before Nominatim.
+   ─────────────────────────────────────────────────────────────────────── */
+const CUSTOM_LOCATIONS: Suggestion[] = [
+  { name: "PSIT College", lat: 26.4499, lng: 80.3319, source: "custom", detail: "Kanpur, Uttar Pradesh" },
+  { name: "PSIT Canteen", lat: 26.4502, lng: 80.3322, source: "custom", detail: "PSIT Campus, Kanpur" },
+  { name: "PSIT Hostel Block A", lat: 26.4505, lng: 80.3325, source: "custom", detail: "PSIT Campus, Kanpur" },
+  { name: "PSIT Library", lat: 26.4512, lng: 80.3331, source: "custom", detail: "PSIT Campus, Kanpur" },
+  { name: "PSIT Main Gate", lat: 26.4495, lng: 80.3315, source: "custom", detail: "PSIT Campus, Kanpur" },
+  { name: "PSIT Sports Ground", lat: 26.4508, lng: 80.3340, source: "custom", detail: "PSIT Campus, Kanpur" },
+];
+
+/* ── Map tile layers ────────────────────────────────────────────────────── */
 const MAP_LAYERS = {
-  street: {
-    name: "🗺️ Street",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  carto: {
+    name: "🗺️ Street (Fast)",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
   },
   satellite: {
     name: "🛰️ Satellite",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: 'Tiles &copy; Esri',
+    attribution: "Tiles &copy; Esri",
   },
-  hybrid: {
-    name: "🌍 Hybrid",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: 'Tiles &copy; Esri',
-    overlay: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  dark: {
+    name: "🌑 Dark",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
   },
-  terrain: {
-    name: "⛰️ Terrain",
-    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
-  },
-  detailed: {
-    name: "📍 Detailed",
-    url: "https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png",
+  osm: {
+    name: "📍 OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   },
 };
 
-// Custom marker for selected location with adjustable size
-const getSelectedMarkerIcon = (size: number) => {
-  const baseSize = 48 * (size / 100);
-  const svgIcon = `
-    <svg width="${baseSize}" height="${baseSize}" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-      <g filter="url(#shadow)">
-        <path d="M24 0C15.6 0 8.8 6.8 8.8 15.2c0 11.4 15.2 32.8 15.2 32.8s15.2-21.4 15.2-32.8C39.2 6.8 32.4 0 24 0z" fill="#10b981"/>
-        <circle cx="24" cy="15.2" r="6" fill="white"/>
-      </g>
-      <defs>
-        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
-        </filter>
-      </defs>
-    </svg>
-  `;
-
-  return L.divIcon({
-    html: svgIcon,
-    className: "selected-location-marker",
-    iconSize: [baseSize, baseSize],
-    iconAnchor: [baseSize / 2, baseSize],
+/* ── Marker icons ───────────────────────────────────────────────────────── */
+const getMarkerIcon = () =>
+  L.divIcon({
+    html: `<svg width="36" height="44" viewBox="0 0 36 44" xmlns="http://www.w3.org/2000/svg">
+      <filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.35"/></filter>
+      <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26S36 31.5 36 18C36 8.06 27.94 0 18 0z" fill="#10b981" filter="url(#s)"/>
+      <circle cx="18" cy="18" r="7" fill="white"/>
+    </svg>`,
+    className: "",
+    iconSize: [36, 44],
+    iconAnchor: [18, 44],
+    popupAnchor: [0, -44],
   });
-};
 
-// Custom marker for live tracking
-const getLiveTrackingIcon = () => {
-  const svgIcon = `
-    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#3b82f6" opacity="0.3">
-        <animate attributeName="r" from="10" to="18" dur="1.5s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" from="0.8" to="0.1" dur="1.5s" repeatCount="indefinite"/>
+const getLiveIcon = () =>
+  L.divIcon({
+    html: `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="18" fill="#3b82f6" opacity="0.25">
+        <animate attributeName="r" from="8" to="18" dur="1.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite"/>
       </circle>
       <circle cx="20" cy="20" r="8" fill="#3b82f6" stroke="white" stroke-width="3"/>
-    </svg>
-  `;
-
-  return L.divIcon({
-    html: svgIcon,
-    className: "current-location-marker",
+    </svg>`,
+    className: "",
     iconSize: [40, 40],
     iconAnchor: [20, 20],
   });
-};
 
-// Component to handle map clicks
-function MapClickHandler({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click: (e) => {
-      onLocationSelect(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
-
-// Component to handle map interactions
+/* ── MapController: handles flyTo, geolocation, live tracking ───────────── */
 function MapController({
-  searchQuery,
-  onSearchComplete,
+  flyTarget,
   goToLocation,
   onLocationFound,
-  liveTrackingPosition,
+  livePos,
 }: {
-  searchQuery: string;
-  onSearchComplete: () => void;
+  flyTarget: [number, number] | null;
   goToLocation: boolean;
   onLocationFound: (lat: number, lng: number) => void;
-  liveTrackingPosition: [number, number] | null;
+  livePos: [number, number] | null;
 }) {
   const map = useMap();
 
-  // Handle search - Enhanced with better zoom levels
   useEffect(() => {
-    if (searchQuery) {
-      const geocodeSearch = async () => {
-        try {
-          const loadingToast = toast.loading("🔍 Searching location...");
-          
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-              searchQuery
-            )}&limit=1&addressdetails=1`,
-            {
-              headers: {
-                'User-Agent': 'WasteWizard/1.0',
-                'Accept': 'application/json',
-                'Accept-Language': 'en'
-              }
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const data = await response.json();
-          toast.dismiss(loadingToast);
-
-          if (data && data.length > 0) {
-            const { lat, lon, display_name, address } = data[0];
-            const latitude = parseFloat(lat);
-            const longitude = parseFloat(lon);
-            
-            // Faster zoom with better level
-            map.setView([latitude, longitude], 16, { animate: true, duration: 0.5 });
-            onLocationFound(latitude, longitude);
-            
-            // Show detailed location info
-            const locationParts = [];
-            if (address?.road) locationParts.push(address.road);
-            if (address?.suburb) locationParts.push(address.suburb);
-            if (address?.city || address?.town) locationParts.push(address.city || address.town);
-            if (address?.state) locationParts.push(address.state);
-            if (address?.postcode) locationParts.push(`PIN: ${address.postcode}`);
-            if (address?.country) locationParts.push(address.country);
-            
-            const detailedLocation = locationParts.join(", ") || display_name;
-            toast.success(`✅ Found: ${detailedLocation}`, { duration: 6000 });
-          } else {
-            toast.error("❌ Location not found. Try:\n• City names (Mumbai, Delhi)\n• Landmarks (India Gate)\n• Full addresses", { duration: 6000 });
-          }
-        } catch (error) {
-          toast.dismiss();
-          console.error("Geocoding error:", error);
-          toast.error("⚠️ Search failed. Please check your internet connection and try again.", { duration: 5000 });
-        }
-        onSearchComplete();
-      };
-
-      geocodeSearch();
+    if (flyTarget) {
+      map.flyTo(flyTarget, 17, { animate: true, duration: 0.8 });
     }
-  }, [searchQuery, map, onSearchComplete, onLocationFound]);
+  }, [flyTarget, map]);
 
-  // Handle current location
   useEffect(() => {
-    if (goToLocation) {
-      if ("geolocation" in navigator) {
-        const toastId = toast.loading("📍 Getting your location...", { duration: Infinity });
-        
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            toast.dismiss(toastId);
-            const { latitude, longitude, accuracy } = position.coords;
-            map.setView([latitude, longitude], 16, { animate: true, duration: 1 });
-            onLocationFound(latitude, longitude);
-            toast.success(`✅ Location found! (±${Math.round(accuracy)}m accuracy)\nClick on the map to select exact position.`, { duration: 5000 });
-          },
-          (error) => {
-            toast.dismiss(toastId);
-            let errorMessage = "Could not get your location.";
-            
-            switch(error.code) {
-              case error.PERMISSION_DENIED:
-                errorMessage = "🚫 Location access denied.\n\nPlease:\n1. Click the location icon in your browser's address bar\n2. Allow location access\n3. Refresh the page and try again";
-                break;
-              case error.POSITION_UNAVAILABLE:
-                errorMessage = "📡 Location unavailable.\n\nPlease:\n• Check if location services are enabled\n• Ensure you have a GPS signal\n• Try again in a moment";
-                break;
-              case error.TIMEOUT:
-                errorMessage = "⏱️ Location request timed out.\n\nPlease try again.";
-                break;
-            }
-            
-            toast.error(errorMessage, { duration: 8000 });
-            console.error("Geolocation error:", error);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0
-          }
-        );
-      } else {
-        toast.error("🚫 Geolocation not supported.\n\nYour browser doesn't support location services. Please:\n• Update your browser\n• Use a modern browser (Chrome, Firefox, Safari, Edge)", { duration: 8000 });
-      }
+    if (!goToLocation) return;
+    if (!("geolocation" in navigator)) {
+      toast.error("Geolocation not supported by your browser.");
+      return;
     }
+    const id = toast.loading("Getting your location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        toast.dismiss(id);
+        const { latitude, longitude, accuracy } = pos.coords;
+        map.flyTo([latitude, longitude], 17, { animate: true, duration: 0.8 });
+        onLocationFound(latitude, longitude);
+        toast.success(`Location found! (±${Math.round(accuracy)}m)`);
+      },
+      (err) => {
+        toast.dismiss(id);
+        if (err.code === err.PERMISSION_DENIED) toast.error("Location permission denied.");
+        else toast.error("Could not get your location.");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   }, [goToLocation, map, onLocationFound]);
 
-  // Handle live tracking position updates
   useEffect(() => {
-    if (liveTrackingPosition) {
-      map.setView(liveTrackingPosition, map.getZoom(), { animate: true, duration: 0.5 });
-    }
-  }, [liveTrackingPosition, map]);
+    if (livePos) map.panTo(livePos, { animate: true, duration: 0.4 });
+  }, [livePos, map]);
 
   return null;
 }
 
+/* ── MapClickHandler ────────────────────────────────────────────────────── */
+function MapClickHandler({ onSelect }: { onSelect: (lat: number, lng: number) => void }) {
+  useMapEvents({ click: (e) => onSelect(e.latlng.lat, e.latlng.lng) });
+  return null;
+}
+
+/* ── Main component ─────────────────────────────────────────────────────── */
 export default function MapLocationPicker({
-  latitude,
-  longitude,
-  onLocationSelect,
+  latitude, longitude, onLocationSelect,
 }: MapLocationPickerProps) {
   const [searchValue, setSearchValue] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
   const [goToLocation, setGoToLocation] = useState(false);
-  const [currentLayer, setCurrentLayer] = useState<keyof typeof MAP_LAYERS>("satellite");
-  const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(
+  const [currentLayer, setCurrentLayer] = useState<keyof typeof MAP_LAYERS>("carto");
+
+  const [selectedPos, setSelectedPos] = useState<[number, number] | null>(
     latitude && longitude ? [parseFloat(latitude), parseFloat(longitude)] : null
   );
-  const [locationName, setLocationName] = useState<string>("");
-  const [detailedAddress, setDetailedAddress] = useState<any>(null);
+  const [locationName, setLocationName] = useState("");
+  const [detailedAddress, setDetailedAddress] = useState<Record<string, string> | null>(null);
+
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [markerSize, setMarkerSize] = useState(100);
   const [isLiveTracking, setIsLiveTracking] = useState(false);
-  const [liveTrackingPosition, setLiveTrackingPosition] = useState<[number, number] | null>(null);
-  const [liveLocationName, setLiveLocationName] = useState<string>("");
-  const [liveDetailedAddress, setLiveDetailedAddress] = useState<any>(null);
+  const [livePos, setLivePos] = useState<[number, number] | null>(null);
+  const [liveName, setLiveName] = useState("");
+
   const watchIdRef = useRef<number | null>(null);
-  const lastReverseGeocodeRef = useRef<number>(0);
+  const lastGeocodeRef = useRef<number>(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
 
-  // Default center (Mumbai)
-  const defaultCenter: [number, number] = [19.0760, 72.8777];
-  const mapCenter = liveTrackingPosition || selectedPosition || defaultCenter;
+  const defaultCenter: [number, number] = [26.4499, 80.3319]; // PSIT default
+  const mapCenter = livePos || selectedPos || defaultCenter;
 
-  // Enhanced fetch location name with detailed address info
-  const fetchLocationName = async (lat: number, lng: number, isLiveTracking: boolean = false) => {
+  /* ── Reverse geocode via proxy ─────────────────────────────────────── */
+  const reverseGeocode = useCallback(async (lat: number, lng: number, isLive = false) => {
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&zoom=18`,
-        {
-          headers: {
-            'User-Agent': 'WasteWizard/1.0',
-            'Accept': 'application/json',
-            'Accept-Language': 'en'
-          }
-        }
-      );
+      const res = await fetch(`/api/geocode?type=reverse&lat=${lat}&lon=${lng}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!data?.display_name) throw new Error();
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const a = data.address || {};
+      const parts = [
+        a.road, a.neighbourhood || a.suburb,
+        a.city || a.town || a.village,
+        a.state, a.postcode ? `PIN: ${a.postcode}` : null, a.country,
+      ].filter(Boolean);
+      const name = parts.join(", ") || data.display_name;
 
-      const data = await response.json();
-      if (data && data.display_name) {
-        const address = data.address || {};
-        
-        // Build detailed location string
-        const locationParts = [];
-        if (address.road) locationParts.push(address.road);
-        if (address.neighbourhood || address.suburb) locationParts.push(address.neighbourhood || address.suburb);
-        if (address.city || address.town || address.village) locationParts.push(address.city || address.town || address.village);
-        if (address.state) locationParts.push(address.state);
-        if (address.postcode) locationParts.push(`PIN: ${address.postcode}`);
-        if (address.country) locationParts.push(address.country);
-        
-        const detailedName = locationParts.join(", ");
-        
-        if (isLiveTracking) {
-          setLiveLocationName(detailedName || data.display_name);
-          setLiveDetailedAddress(address);
-          onLocationSelect(lat.toFixed(6), lng.toFixed(6), detailedName || data.display_name);
-        } else {
-          setLocationName(detailedName || data.display_name);
-          setDetailedAddress(address);
-          onLocationSelect(lat.toFixed(6), lng.toFixed(6), detailedName || data.display_name);
-        }
-        return detailedName || data.display_name;
+      if (isLive) {
+        setLiveName(name);
+        onLocationSelect(lat.toFixed(6), lng.toFixed(6), name);
       } else {
-        const fallbackName = "Unknown location";
-        if (isLiveTracking) {
-          setLiveLocationName(fallbackName);
-        } else {
-          setLocationName(fallbackName);
-        }
-        onLocationSelect(lat.toFixed(6), lng.toFixed(6), fallbackName);
-        return fallbackName;
+        setLocationName(name);
+        setDetailedAddress(a);
+        onLocationSelect(lat.toFixed(6), lng.toFixed(6), name);
       }
-    } catch (error) {
-      console.error("Reverse geocoding error:", error);
-      const fallbackName = "Unable to fetch location name";
-      if (isLiveTracking) {
-        setLiveLocationName(fallbackName);
-      } else {
-        setLocationName(fallbackName);
-      }
-      onLocationSelect(lat.toFixed(6), lng.toFixed(6), fallbackName);
-      return fallbackName;
+      return name;
+    } catch {
+      const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      onLocationSelect(lat.toFixed(6), lng.toFixed(6), fallback);
+      return fallback;
     }
-  };
+  }, [onLocationSelect]);
 
-  const handleSearch = () => {
-    if (searchValue.trim()) {
-      setSearchQuery(searchValue);
-    } else {
-      toast.error("⚠️ Please enter a search term");
-    }
-  };
-
-  const handleClearSearch = () => {
-    setSearchValue("");
-    setSearchQuery("");
-  };
-
-  const handleCurrentLocation = () => {
-    setGoToLocation(true);
-    setTimeout(() => setGoToLocation(false), 100);
-  };
-
-  const handleSearchComplete = () => {
-    setSearchQuery("");
-  };
-
-  const handleMapClick = async (lat: number, lng: number) => {
-    setSelectedPosition([lat, lng]);
-    
-    // Show loading state
-    setLocationName("Loading location name...");
+  /* ── Map click → select + autofill ────────────────────────────────── */
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    setSelectedPos([lat, lng]);
+    setLocationName("Fetching address...");
+    // Immediately autofill coordinates
     onLocationSelect(lat.toFixed(6), lng.toFixed(6));
+    await reverseGeocode(lat, lng, false);
+    toast.success("Location selected!");
+  }, [onLocationSelect, reverseGeocode]);
 
-    // Fetch location name with details
-    await fetchLocationName(lat, lng, false);
-    toast.success("✅ Location selected!");
-  };
+  /* ── Autocomplete: search custom + Nominatim ───────────────────────── */
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (!query.trim()) { setSuggestions([]); return; }
+    setSearching(true);
 
-  const handleLocationFound = (lat: number, lng: number) => {
-    handleMapClick(lat, lng);
-  };
-
-  // Start live tracking
-  const startLiveTracking = () => {
-    if (!("geolocation" in navigator)) {
-      toast.error("🚫 Geolocation not supported by your browser.", { duration: 5000 });
-      return;
-    }
-
-    toast.loading("🔴 Starting live tracking...", { duration: 2000 });
-
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setLiveTrackingPosition([latitude, longitude]);
-        
-        if (!isLiveTracking) {
-          setIsLiveTracking(true);
-          toast.success(`🔴 Live tracking active!\n(±${Math.round(accuracy)}m accuracy)`, { duration: 4000 });
-        }
-
-        // Fetch location name (throttled to every 5 seconds to avoid API abuse)
-        const now = Date.now();
-        if (now - lastReverseGeocodeRef.current > 5000) {
-          lastReverseGeocodeRef.current = now;
-          fetchLocationName(latitude, longitude, true);
-        }
-      },
-      (error) => {
-        console.error("Live tracking error:", error);
-        
-        let errorMessage = "Failed to track location.";
-        switch(error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = "🚫 Location permission denied.\n\nPlease allow location access in your browser settings.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = "📡 Position unavailable.\n\nPlease check your location services.";
-            break;
-          case error.TIMEOUT:
-            errorMessage = "⏱️ Location request timed out.";
-            break;
-        }
-        
-        toast.error(errorMessage, { duration: 6000 });
-        stopLiveTracking();
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 1000,
-      }
+    // Layer 1: custom locations
+    const custom = CUSTOM_LOCATIONS.filter((loc) =>
+      loc.name.toLowerCase().includes(query.toLowerCase())
     );
 
-    watchIdRef.current = watchId;
+    // Layer 2: Nominatim via proxy (only if query ≥ 3 chars)
+    let osm: Suggestion[] = [];
+    if (query.length >= 3) {
+      try {
+        const res = await fetch(`/api/geocode?type=search&q=${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const data = await res.json();
+          osm = (Array.isArray(data) ? data.slice(0, 4) : []).map((item: any) => ({
+            name: item.display_name?.split(",")[0] ?? item.display_name,
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+            source: "osm" as const,
+            detail: item.display_name?.split(",").slice(1, 3).join(",").trim(),
+          }));
+        }
+      } catch { /* silent */ }
+    }
+
+    setSuggestions([...custom, ...osm].slice(0, 8));
+    setSearching(false);
+  }, []);
+
+  /* ── Debounced input handler ───────────────────────────────────────── */
+  const handleInputChange = (val: string) => {
+    setSearchValue(val);
+    setShowSuggestions(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(val), 300);
   };
 
-  // Stop live tracking
-  const stopLiveTracking = () => {
+  /* ── Select a suggestion ───────────────────────────────────────────── */
+  const handleSelectSuggestion = useCallback((s: Suggestion) => {
+    setSearchValue(s.name);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setFlyTarget([s.lat, s.lng]);
+    setTimeout(() => setFlyTarget(null), 100);
+    handleMapClick(s.lat, s.lng);
+  }, [handleMapClick]);
+
+  /* ── Manual search (Enter / button) ───────────────────────────────── */
+  const handleSearch = useCallback(async () => {
+    if (!searchValue.trim()) { toast.error("Please enter a search term"); return; }
+    setShowSuggestions(false);
+
+    // Check custom first
+    const custom = CUSTOM_LOCATIONS.find((l) =>
+      l.name.toLowerCase().includes(searchValue.toLowerCase())
+    );
+    if (custom) { handleSelectSuggestion(custom); return; }
+
+    // Nominatim fallback
+    setSearching(true);
+    const id = toast.loading("Searching...");
+    try {
+      const res = await fetch(`/api/geocode?type=search&q=${encodeURIComponent(searchValue)}`);
+      const data = await res.json();
+      toast.dismiss(id);
+      if (Array.isArray(data) && data.length > 0) {
+        const item = data[0];
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
+        setFlyTarget([lat, lng]);
+        setTimeout(() => setFlyTarget(null), 100);
+        handleMapClick(lat, lng);
+        toast.success(`Found: ${item.display_name?.split(",").slice(0, 2).join(", ")}`);
+      } else {
+        toast.error("Location not found. Try a different search term.");
+      }
+    } catch {
+      toast.dismiss(id);
+      toast.error("Search failed. Check your connection.");
+    } finally {
+      setSearching(false);
+    }
+  }, [searchValue, handleSelectSuggestion, handleMapClick]);
+
+  /* ── Live tracking ─────────────────────────────────────────────────── */
+  const startLiveTracking = useCallback(() => {
+    if (!("geolocation" in navigator)) { toast.error("Geolocation not supported."); return; }
+    setIsLiveTracking(true);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setLivePos([latitude, longitude]);
+        const now = Date.now();
+        if (now - lastGeocodeRef.current > 5000) {
+          lastGeocodeRef.current = now;
+          reverseGeocode(latitude, longitude, true);
+        }
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) toast.error("Location permission denied.");
+        else toast.error("Live tracking failed.");
+        stopLiveTracking();
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
+    );
+  }, [reverseGeocode]);
+
+  const stopLiveTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
     setIsLiveTracking(false);
-    setLiveTrackingPosition(null);
-    setLiveLocationName("");
-    setLiveDetailedAddress(null);
-    toast.info("⏹️ Live tracking stopped");
-  };
-
-  // Toggle live tracking
-  const toggleLiveTracking = () => {
-    if (isLiveTracking) {
-      stopLiveTracking();
-    } else {
-      startLiveTracking();
-    }
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
+    setLivePos(null);
+    setLiveName("");
   }, []);
 
-  const selectedLayer = MAP_LAYERS[currentLayer];
+  useEffect(() => () => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+  }, []);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const layer = MAP_LAYERS[currentLayer];
 
   return (
     <div className={isFullScreen ? "fixed inset-0 z-[9999] bg-background flex flex-col" : "h-full w-full flex flex-col"}>
-      {/* Search Bar - ABOVE MAP (not overlapping) */}
-      <div className="bg-background border-b-2 border-border p-3 flex-shrink-0 z-10">
+
+      {/* ── Search bar ─────────────────────────────────────────────────── */}
+      <div className="bg-background border-b border-border p-3 flex-shrink-0 z-20">
         <div className="flex flex-col gap-2">
-          {/* Search Input Container */}
-          <div className="flex gap-2 items-center bg-card/95 backdrop-blur-sm rounded-lg border-2 border-border shadow-lg p-2">
-            <Search className="h-5 w-5 text-muted-foreground ml-2 flex-shrink-0" />
-            <Input
-              type="text"
-              placeholder="Search city, landmark, address, PIN code..."
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSearch();
-                }
-              }}
-              className="flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent text-sm"
-            />
-            {searchValue && (
-              <Button
-                onClick={handleClearSearch}
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 flex-shrink-0"
+
+          {/* Search input + autocomplete */}
+          <div ref={searchBoxRef} className="relative">
+            <div className="flex gap-2 items-center bg-card rounded-xl border-2 border-border shadow-sm px-3 py-2">
+              <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Search city, college, landmark, PIN code..."
+                value={searchValue}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onFocus={() => searchValue && setShowSuggestions(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); handleSearch(); }
+                  if (e.key === "Escape") setShowSuggestions(false);
+                }}
+                className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground"
+              />
+              {searchValue && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchValue(""); setSuggestions([]); setShowSuggestions(false); }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              <button
                 type="button"
+                onClick={handleSearch}
+                disabled={searching}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-colors disabled:opacity-60"
               >
-                <X className="h-4 w-4" />
-              </Button>
+                {searching ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Search className="h-3.5 w-3.5" />
+                )}
+                Search
+              </button>
+            </div>
+
+            {/* Autocomplete dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-[2000] overflow-hidden">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onMouseDown={() => handleSelectSuggestion(s)}
+                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-accent text-left transition-colors border-b border-border/50 last:border-0"
+                  >
+                    <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${s.source === "custom" ? "text-emerald-500" : "text-muted-foreground"}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                      {s.detail && <p className="text-xs text-muted-foreground truncate">{s.detail}</p>}
+                    </div>
+                    {s.source === "custom" && (
+                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded flex-shrink-0">
+                        Local
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
-            <Button onClick={handleSearch} size="sm" className="gap-2 bg-primary hover:bg-primary/90 flex-shrink-0" type="button">
-              <Search className="h-4 w-4" />
-              Search
-            </Button>
           </div>
 
-          {/* Action Buttons Row */}
-          <div className="flex gap-2 justify-between items-center">
-            <div className="text-xs text-muted-foreground">
-              Click on map to select location
-            </div>
-            <div className="flex gap-2">
-              {/* Get Current Location Button */}
-              <Button
-                onClick={handleCurrentLocation}
-                size="sm"
-                variant="outline"
-                className="h-9 gap-2"
-                title="Get current location"
+          {/* Action buttons row */}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {selectedPos
+                ? <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 inline" /> {selectedPos[0].toFixed(5)}, {selectedPos[1].toFixed(5)}
+                  </span>
+                : "Click map or search to select location"}
+            </p>
+            <div className="flex gap-1.5">
+              <button
                 type="button"
+                onClick={() => { setGoToLocation(true); setTimeout(() => setGoToLocation(false), 200); }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors"
+                title="Use current location"
               >
-                <Navigation className="h-4 w-4" />
+                <Navigation className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Current</span>
-              </Button>
+              </button>
 
-              {/* Live Tracking Toggle Button */}
-              <Button
-                onClick={toggleLiveTracking}
-                size="sm"
-                className={`h-9 gap-2 ${
-                  isLiveTracking 
-                    ? "bg-red-500 hover:bg-red-600 animate-pulse" 
-                    : "bg-blue-500 hover:bg-blue-600"
-                }`}
-                title={isLiveTracking ? "Stop real-time tracking" : "Start real-time tracking"}
+              <button
                 type="button"
+                onClick={() => isLiveTracking ? stopLiveTracking() : startLiveTracking()}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  isLiveTracking
+                    ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                }`}
+                title={isLiveTracking ? "Stop tracking" : "Live track"}
               >
-                {isLiveTracking ? (
-                  <>
-                    <StopCircle className="h-4 w-4" />
-                    <span className="hidden sm:inline">Stop Track</span>
-                  </>
-                ) : (
-                  <>
-                    <CircleDot className="h-4 w-4" />
-                    <span className="hidden sm:inline">Live Track</span>
-                  </>
-                )}
-              </Button>
+                {isLiveTracking ? <StopCircle className="h-3.5 w-3.5" /> : <CircleDot className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{isLiveTracking ? "Stop" : "Live"}</span>
+              </button>
 
-              {/* Layer Selector */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 gap-2"
-                    title="Change map layer"
+                  <button
                     type="button"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors"
                   >
-                    <Layers className="h-4 w-4" />
+                    <Layers className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Layer</span>
-                  </Button>
+                  </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 z-[10000]">
-                  {Object.entries(MAP_LAYERS).map(([key, layer]) => (
+                <DropdownMenuContent align="end" className="w-44 z-[10000]">
+                  {Object.entries(MAP_LAYERS).map(([key, l]) => (
                     <DropdownMenuItem
                       key={key}
                       onClick={() => setCurrentLayer(key as keyof typeof MAP_LAYERS)}
                       className={currentLayer === key ? "bg-accent font-semibold" : ""}
                     >
-                      {layer.name}
+                      {l.name}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Full Screen Toggle */}
-              <Button
-                onClick={() => setIsFullScreen(!isFullScreen)}
-                size="sm"
-                variant="outline"
-                className="h-9 gap-2"
-                title={isFullScreen ? "Exit full screen" : "Enter full screen"}
+              <button
                 type="button"
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors"
+                title={isFullScreen ? "Exit fullscreen" : "Fullscreen"}
               >
-                {isFullScreen ? (
-                  <>
-                    <Minimize2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Exit</span>
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Fullscreen</span>
-                  </>
-                )}
-              </Button>
+                {isFullScreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </button>
             </div>
           </div>
 
-          {/* Live Tracking Status with Detailed Location */}
-          {isLiveTracking && liveTrackingPosition && (
-            <div className="bg-blue-500 text-white rounded-lg p-3 animate-pulse">
-              <div className="flex items-start gap-2">
-                <CircleDot className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold mb-1">🔴 Live Tracking Active</div>
-                  {liveLocationName && (
-                    <div className="text-xs break-words">
-                      📍 {liveLocationName}
-                    </div>
-                  )}
-                  {liveDetailedAddress && (
-                    <div className="text-xs mt-1 space-y-0.5 opacity-90">
-                      {liveDetailedAddress.road && <div>🛣️ {liveDetailedAddress.road}</div>}
-                      {liveDetailedAddress.postcode && <div>📮 PIN: {liveDetailedAddress.postcode}</div>}
-                    </div>
-                  )}
-                  <div className="text-xs font-mono mt-1 opacity-80">
-                    {liveTrackingPosition[0].toFixed(6)}, {liveTrackingPosition[1].toFixed(6)}
-                  </div>
-                </div>
+          {/* Live tracking status bar */}
+          {isLiveTracking && livePos && (
+            <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-lg px-3 py-2">
+              <CircleDot className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Live Tracking</span>
+                {liveName && <span className="text-xs text-muted-foreground ml-2 truncate">{liveName}</span>}
               </div>
+              <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
+                {livePos[0].toFixed(5)}, {livePos[1].toFixed(5)}
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Map Container - Takes remaining space */}
+      {/* ── Map ────────────────────────────────────────────────────────── */}
       <div className="flex-1 relative">
-        {/* Marker Size Controls - Positioned on Map */}
-        {selectedPosition && !isLiveTracking && (
-          <div className="absolute top-4 right-4 z-[1000] bg-card/95 backdrop-blur-sm rounded-full shadow-xl border-2 border-border p-2 flex flex-col gap-2">
-            <Button
-              onClick={() => setMarkerSize(Math.min(200, markerSize + 20))}
-              size="icon"
-              className="h-10 w-10 rounded-full bg-background hover:bg-accent"
-              title="Increase marker size"
-              type="button"
-              variant="outline"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <div className="text-xs font-semibold text-center px-2 text-foreground">
-              {markerSize}%
-            </div>
-            <Button
-              onClick={() => setMarkerSize(Math.max(50, markerSize - 20))}
-              size="icon"
-              className="h-10 w-10 rounded-full bg-background hover:bg-accent"
-              title="Decrease marker size"
-              type="button"
-              variant="outline"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-
-        {/* Map */}
         <MapContainer
           center={mapCenter}
-          zoom={13}
+          zoom={15}
           scrollWheelZoom={true}
           className="h-full w-full"
           zoomControl={true}
           preferCanvas={true}
+          zoomSnap={0.25}
+          zoomDelta={0.5}
+          // @ts-ignore — valid Leaflet option
+          zoomAnimation={true}
+          fadeAnimation={true}
+          markerZoomAnimation={true}
         >
           <TileLayer
-            attribution={selectedLayer.attribution}
-            url={selectedLayer.url}
-            key={`${currentLayer}-base`}
+            key={currentLayer}
+            attribution={layer.attribution}
+            url={layer.url}
+            maxZoom={19}
             updateWhenIdle={false}
-            keepBuffer={2}
+            keepBuffer={4}
           />
-          {currentLayer === "hybrid" && selectedLayer.overlay && (
-            <TileLayer
-              url={selectedLayer.overlay}
-              opacity={0.3}
-              key={`${currentLayer}-overlay`}
-              updateWhenIdle={false}
-            />
-          )}
-          <MapClickHandler onLocationSelect={handleMapClick} />
-          <MapController
-            searchQuery={searchQuery}
-            onSearchComplete={handleSearchComplete}
-            goToLocation={goToLocation}
-            onLocationFound={handleLocationFound}
-            liveTrackingPosition={liveTrackingPosition}
-          />
-          {selectedPosition && !isLiveTracking && (
-            <Marker 
-              position={selectedPosition} 
-              icon={getSelectedMarkerIcon(markerSize)}
-            >
-              <Popup className="custom-popup" maxWidth={350}>
-                <div className="p-3">
-                  <h3 className="font-bold text-base mb-3 flex items-center gap-2 text-foreground">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    Selected Location
-                  </h3>
-                  
-                  {locationName && (
-                    <div className="mb-3 p-2 bg-muted/50 rounded-md">
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">📍 Address:</p>
-                      <p className="text-sm text-foreground break-words">{locationName}</p>
-                    </div>
-                  )}
 
+          <MapClickHandler onSelect={handleMapClick} />
+          <MapController
+            flyTarget={flyTarget}
+            goToLocation={goToLocation}
+            onLocationFound={handleMapClick}
+            livePos={livePos}
+          />
+
+          {/* Selected marker */}
+          {selectedPos && !isLiveTracking && (
+            <Marker position={selectedPos} icon={getMarkerIcon()}>
+              <Popup maxWidth={300}>
+                <div className="p-2 space-y-2">
+                  <p className="font-semibold text-sm flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-emerald-500" /> Selected Location
+                  </p>
+                  {locationName && locationName !== "Fetching address..." && (
+                    <p className="text-xs text-muted-foreground">{locationName}</p>
+                  )}
                   {detailedAddress && (
-                    <div className="mb-3 space-y-2 text-xs">
-                      {detailedAddress.road && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🛣️ Road:</span>
-                          <span className="text-foreground">{detailedAddress.road}</span>
-                        </div>
-                      )}
-                      {(detailedAddress.neighbourhood || detailedAddress.suburb) && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🏘️ Area:</span>
-                          <span className="text-foreground">{detailedAddress.neighbourhood || detailedAddress.suburb}</span>
-                        </div>
-                      )}
-                      {(detailedAddress.city || detailedAddress.town) && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🏙️ City:</span>
-                          <span className="text-foreground">{detailedAddress.city || detailedAddress.town}</span>
-                        </div>
-                      )}
-                      {detailedAddress.state && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">📍 State:</span>
-                          <span className="text-foreground">{detailedAddress.state}</span>
-                        </div>
-                      )}
-                      {detailedAddress.postcode && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">📮 PIN:</span>
-                          <span className="text-foreground">{detailedAddress.postcode}</span>
-                        </div>
-                      )}
-                      {detailedAddress.country && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🌍 Country:</span>
-                          <span className="text-foreground">{detailedAddress.country}</span>
-                        </div>
-                      )}
+                    <div className="text-xs space-y-1 border-t pt-2">
+                      {detailedAddress.road && <p>🛣️ {detailedAddress.road}</p>}
+                      {(detailedAddress.city || detailedAddress.town) && <p>🏙️ {detailedAddress.city || detailedAddress.town}</p>}
+                      {detailedAddress.state && <p>📍 {detailedAddress.state}</p>}
+                      {detailedAddress.postcode && <p>📮 PIN: {detailedAddress.postcode}</p>}
                     </div>
                   )}
-                  
-                  <div className="space-y-2 pt-2 border-t border-border">
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-semibold text-muted-foreground min-w-[70px]">Latitude:</span>
-                      <span className="text-xs font-mono text-foreground">{selectedPosition[0].toFixed(6)}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-semibold text-muted-foreground min-w-[70px]">Longitude:</span>
-                      <span className="text-xs font-mono text-foreground">{selectedPosition[1].toFixed(6)}</span>
-                    </div>
+                  <div className="text-xs font-mono border-t pt-2 text-muted-foreground">
+                    {selectedPos[0].toFixed(6)}, {selectedPos[1].toFixed(6)}
                   </div>
                 </div>
               </Popup>
             </Marker>
           )}
-          {isLiveTracking && liveTrackingPosition && (
-            <Marker 
-              position={liveTrackingPosition} 
-              icon={getLiveTrackingIcon()}
-            >
-              <Popup className="custom-popup" maxWidth={350}>
-                <div className="p-3">
-                  <h3 className="font-bold text-base mb-3 flex items-center gap-2 text-blue-500">
-                    <CircleDot className="h-4 w-4" />
-                    Live Tracking
-                  </h3>
-                  
-                  {liveLocationName && (
-                    <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md">
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">📍 Current Location:</p>
-                      <p className="text-sm text-foreground break-words">{liveLocationName}</p>
-                    </div>
-                  )}
 
-                  {liveDetailedAddress && (
-                    <div className="mb-3 space-y-2 text-xs">
-                      {liveDetailedAddress.road && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🛣️ Road:</span>
-                          <span className="text-foreground">{liveDetailedAddress.road}</span>
-                        </div>
-                      )}
-                      {(liveDetailedAddress.neighbourhood || liveDetailedAddress.suburb) && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🏘️ Area:</span>
-                          <span className="text-foreground">{liveDetailedAddress.neighbourhood || liveDetailedAddress.suburb}</span>
-                        </div>
-                      )}
-                      {(liveDetailedAddress.city || liveDetailedAddress.town) && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🏙️ City:</span>
-                          <span className="text-foreground">{liveDetailedAddress.city || liveDetailedAddress.town}</span>
-                        </div>
-                      )}
-                      {liveDetailedAddress.state && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">📍 State:</span>
-                          <span className="text-foreground">{liveDetailedAddress.state}</span>
-                        </div>
-                      )}
-                      {liveDetailedAddress.postcode && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">📮 PIN:</span>
-                          <span className="text-foreground">{liveDetailedAddress.postcode}</span>
-                        </div>
-                      )}
-                      {liveDetailedAddress.country && (
-                        <div className="flex gap-2">
-                          <span className="font-semibold text-muted-foreground">🌍 Country:</span>
-                          <span className="text-foreground">{liveDetailedAddress.country}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  <div className="space-y-2 pt-2 border-t border-border">
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-semibold text-muted-foreground min-w-[70px]">Latitude:</span>
-                      <span className="text-xs font-mono text-foreground">{liveTrackingPosition[0].toFixed(6)}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-semibold text-muted-foreground min-w-[70px]">Longitude:</span>
-                      <span className="text-xs font-mono text-foreground">{liveTrackingPosition[1].toFixed(6)}</span>
-                    </div>
-                  </div>
+          {/* Live tracking marker */}
+          {isLiveTracking && livePos && (
+            <Marker position={livePos} icon={getLiveIcon()}>
+              <Popup>
+                <div className="p-2 text-xs">
+                  <p className="font-semibold text-blue-500 mb-1">🔵 Live Position</p>
+                  {liveName && <p className="text-muted-foreground mb-1">{liveName}</p>}
+                  <p className="font-mono">{livePos[0].toFixed(6)}, {livePos[1].toFixed(6)}</p>
                 </div>
               </Popup>
             </Marker>

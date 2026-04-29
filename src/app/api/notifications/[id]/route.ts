@@ -75,3 +75,38 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const notificationId = parseInt(params.id);
+    if (isNaN(notificationId)) {
+      return NextResponse.json({ error: 'Valid ID is required' }, { status: 400 });
+    }
+
+    const existing = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.id, notificationId), eq(notifications.userId, user.id)))
+      .limit(1);
+
+    if (existing.length === 0) {
+      return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+    }
+
+    await db
+      .delete(notifications)
+      .where(and(eq(notifications.id, notificationId), eq(notifications.userId, user.id)));
+
+    return NextResponse.json({ message: 'Deleted successfully' }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
