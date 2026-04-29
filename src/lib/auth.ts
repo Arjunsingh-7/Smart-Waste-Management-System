@@ -43,7 +43,8 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
-  ],
+    process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? "",
+  ].filter(Boolean),
 });
 
 // Session helper
