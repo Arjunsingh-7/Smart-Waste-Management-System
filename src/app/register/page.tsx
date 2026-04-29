@@ -100,8 +100,10 @@ export default function RegisterPage() {
       if (error?.code) {
         const errorMap: Record<string, string> = {
           USER_ALREADY_EXISTS: "Email already registered. Please login instead.",
+          INVALID_EMAIL: "Please enter a valid email address.",
+          INVALID_PASSWORD: "Password must be at least 6 characters.",
         };
-        toast.error(errorMap[error.code] || "Registration failed. Please try again.");
+        toast.error(errorMap[error.code] || `Registration failed: ${error.message || error.code}`);
         setIsLoading(false);
         return;
       }
