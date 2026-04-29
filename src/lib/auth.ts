@@ -43,7 +43,10 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
+    "https://smartwastesite.vercel.app",
+    "https://waste-wizard-smart-waste-management.vercel.app",
     process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? "",
+    process.env.NEXT_PUBLIC_SITE_URL ?? "",
   ].filter(Boolean),
 });
 
