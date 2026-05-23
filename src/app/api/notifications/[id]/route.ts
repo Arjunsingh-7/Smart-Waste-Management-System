@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser(request);
@@ -17,7 +17,7 @@ export async function PUT(
       );
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     if (!id || isNaN(parseInt(id))) {
       return NextResponse.json(
@@ -78,7 +78,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser(request);
@@ -86,7 +86,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const notificationId = parseInt(params.id);
+    const { id } = await params;
+    const notificationId = parseInt(id);
     if (isNaN(notificationId)) {
       return NextResponse.json({ error: 'Valid ID is required' }, { status: 400 });
     }

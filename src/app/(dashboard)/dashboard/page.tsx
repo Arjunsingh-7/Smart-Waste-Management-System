@@ -5,6 +5,7 @@ import { useSession } from "@/lib/auth-client";
 import { MapPin, List, Bell, TrendingUp, Trash2, AlertCircle, RefreshCw, X, Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
+import EnvironmentalImpactBanner from "@/components/dashboard/EnvironmentalImpactBanner";
 
 // Auto-refresh every 30 seconds
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -19,8 +20,19 @@ const DustbinList = dynamic(() => import("@/components/dashboard/DustbinList"), 
 });
 
 interface Dustbin {
-  id: number; name: string; type: string; locationName: string;
-  latitude: string; longitude: string; fillLevel: number; status: string; isActive: boolean;
+  id: number;
+  name: string;
+  type: string;
+  locationName: string;
+  latitude: string;
+  longitude: string;
+  fillLevel: number;
+  status: string;
+  wetLevel?: number;
+  dryLevel?: number;
+  wetStatus?: string;
+  dryStatus?: string;
+  isActive: boolean;
 }
 interface Notification {
   id: number; message: string; type: string; isRead: boolean; createdAt: string;
@@ -93,8 +105,8 @@ export default function DashboardPage() {
       setLoading(true);
       const token = localStorage.getItem("bearer_token");
       const [dRes, nRes] = await Promise.all([
-        fetch("/api/dustbins?is_active=1", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/notifications?is_read=0", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/dustbins?is_active=1", { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' }),
+        fetch("/api/notifications?is_read=0", { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' }),
       ]);
       if (dRes.ok) setDustbins(await dRes.json());
       if (nRes.ok) setNotifications(await nRes.json());
@@ -164,12 +176,26 @@ export default function DashboardPage() {
 
   const totalDustbins = useMemo(() => dustbins.length, [dustbins]);
   const binsRequiringCollection = useMemo(() => dustbins.filter((b) => b.fillLevel >= 75).length, [dustbins]);
+  const binsRequiringCollectionWet = useMemo(() => dustbins.filter((b) => (b.wetLevel ?? 0) >= 75).length, [dustbins]);
+  const binsRequiringCollectionDry = useMemo(() => dustbins.filter((b) => (b.dryLevel ?? 0) >= 75).length, [dustbins]);
   const avgFillLevel = useMemo(() =>
-    dustbins.length > 0 ? Math.round(dustbins.reduce((s, b) => s + b.fillLevel, 0) / dustbins.length) : 0,
+    dustbins.length > 0 ? Math.round(dustbins.reduce((s, b) => s + (b.fillLevel ?? 0), 0) / dustbins.length) : 0,
   [dustbins]);
   const unreadNotifications = useMemo(() => notifications.length, [notifications]);
 
-  const statValues = [totalDustbins, binsRequiringCollection, `${avgFillLevel}%`, unreadNotifications];
+  const statValues = [
+    totalDustbins,
+    binsRequiringCollection,
+    `${avgFillLevel}%`,
+    unreadNotifications,
+  ];
+
+  // Derived metrics for Environmental Impact banner (presentational only)
+  const wasteCollectedKg = Math.round(totalDustbins * 125);
+  const co2ReducedKg = Math.round(totalDustbins * 3.5);
+  const collectionsCompleted = Math.max(0, Math.round(totalDustbins * 0.6));
+  const smartBinsActive = totalDustbins;
+  const impactScore = Math.max(0, 100 - avgFillLevel);
 
   const formatTime = (d: string) => {
     const diff = Date.now() - new Date(d).getTime();
@@ -241,6 +267,11 @@ export default function DashboardPage() {
             <p className={`text-3xl font-bold ${card.textColor}`}>{statValues[i]}</p>
             <p className="text-xs text-muted-foreground mt-1">
               {card.subIcon}{card.sub}
+              {card.key === 'collection' && (
+                <span className="block text-xs text-muted-foreground mt-1">
+                  Wet: {binsRequiringCollectionWet} · Dry: {binsRequiringCollectionDry}
+                </span>
+              )}
             </p>
           </div>
         ))}
@@ -345,6 +376,15 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Environmental Impact Analytics Banner (visual only) */}
+      <EnvironmentalImpactBanner
+        wasteCollected={wasteCollectedKg}
+        co2Reduced={co2ReducedKg}
+        collectionsCompleted={collectionsCompleted}
+        smartBinsActive={smartBinsActive}
+        impactScore={impactScore}
+      />
     </div>
   );
 }

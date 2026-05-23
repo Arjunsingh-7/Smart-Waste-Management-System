@@ -111,21 +111,35 @@ export const DashboardSidebar = memo(function DashboardSidebar() {
 
   /* inner JSX extracted as a render function so it always gets fresh props */
   const renderSidebar = () => (
-    <div className="flex flex-col h-full bg-gradient-to-b from-[#14532d] to-[#166534]">
+    <div className="flex flex-col h-full bg-gradient-to-b from-[#07160c] via-[#0b2a18] to-[#071116] shadow-inner backdrop-blur-sm border-r border-white/5">
 
-      {/* ── Logo ── */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/15 shadow-inner">
-          <Recycle className="w-5 h-5 text-white animate-spin-slow" />
+      {/* ── Logo / Org label ── */}
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/6">
+        <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-black/10 backdrop-blur-sm ring-1 ring-emerald-400/10">
+          <Recycle className="w-5 h-5 text-emerald-200 drop-shadow-[0_2px_6px_rgba(16,185,129,0.12)]" />
         </div>
         <div>
-          <p className="text-white font-bold text-[15px] leading-tight tracking-tight">Waste Wizard</p>
-          <p className="text-white/40 text-[10px] uppercase tracking-widest">Admin Panel</p>
+          <p className="text-white font-extrabold text-sm leading-tight tracking-tight">Waste Wizard</p>
+          <p className="text-emerald-200 text-[11px] uppercase tracking-wider">Organization •</p>
         </div>
       </div>
 
+      {/* ── User mini-card (moved up) ── */}
+      {session?.user && (
+        <div className="mx-4 mt-4 mb-2 p-3 rounded-2xl bg-white/6 border border-white/6 flex items-center gap-3 backdrop-blur-sm">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/30 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 ring-1 ring-white/8">
+            {session.user.name?.[0]?.toUpperCase() ?? "U"}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-white text-sm font-semibold truncate leading-tight">{session.user.name}</p>
+            <p className="text-emerald-200 text-[12px] truncate">{session.user.email}</p>
+          </div>
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 flex-shrink-0" title="Online" />
+        </div>
+      )}
+
       {/* ── Section label ── */}
-      <p className="px-5 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/35">
+      <p className="px-5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-emerald-200/40">
         Navigation
       </p>
 
@@ -133,14 +147,14 @@ export const DashboardSidebar = memo(function DashboardSidebar() {
       <NavItems pathname={pathname ?? ""} onNavigate={closeMobile} />
 
       {/* ── Divider ── */}
-      <div className="mx-4 border-t border-white/10" />
+      <div className="mx-4 border-t border-white/6 mt-3" />
 
       {/* ── Bottom actions ── */}
       <div className="px-2 py-3 space-y-0.5">
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
-          className="group flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white/65 hover:bg-white/10 hover:text-white transition-all duration-150"
+          className="group flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-white/65 hover:bg-white/10 hover:text-white transition-all duration-200"
         >
           {theme === "dark"
             ? <Sun  className="w-[18px] h-[18px] flex-shrink-0 group-hover:rotate-45  transition-transform duration-300" />
@@ -164,19 +178,24 @@ export const DashboardSidebar = memo(function DashboardSidebar() {
         </button>
       </div>
 
-      {/* ── User card ── */}
-      {session?.user && (
-        <div className="mx-3 mb-3 p-3 rounded-xl bg-white/8 border border-white/10 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-emerald-500/40 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-2 ring-white/20">
-            {session.user.name?.[0]?.toUpperCase() ?? "U"}
+      {/* user card removed from bottom, moved above */}
+
+      {/* ── Eco message card (bottom) ── */}
+      <div className="mt-auto px-4 pb-6">
+        <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-800/20 to-black/10 border border-white/6 backdrop-blur-sm flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
+            {/* small eco SVG */}
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C9.243 2 6 4.5 6 7.5C6 10.5 8.239 13 11 13C13.761 13 16 10.5 16 7.5C16 4.5 12.757 2 12 2Z" fill="#16C47F" fillOpacity="0.95"/>
+              <path d="M4 22C4 16.477 8.477 12 14 12" stroke="#16C47F" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-white text-[13px] font-semibold truncate leading-tight">{session.user.name}</p>
-            <p className="text-white/45 text-[11px] truncate">{session.user.email}</p>
+          <div className="flex-1">
+            <p className="text-white font-semibold text-sm">Keep Our City Clean</p>
+            <p className="text-emerald-200 text-xs mt-0.5">Together we create a greener future</p>
           </div>
-          <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" title="Online" />
         </div>
-      )}
+      </div>
     </div>
   );
 

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, Plus, MapPin, Power, Lock, RefreshCw } from "lucide-react";
+import { Trash2, Plus, MapPin, Power, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -34,23 +34,29 @@ export default function DevicesPage() {
   const [actionId, setActionId] = useState<number | null>(null);
   const [actionType, setActionType] = useState<"delete" | "toggle" | null>(null);
 
-  const atLimit = dustbins.length >= limits.maxBins;
-
   const fetchDustbins = useCallback(async () => {
+    if (!session?.user?.id) return;
+    
     try {
       setLoading(true);
       const token = localStorage.getItem("bearer_token");
       const response = await fetch("/api/dustbins?is_active=1", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (response.ok) setDustbins(await response.json());
-      else toast.error("Failed to fetch dustbins");
-    } catch {
+      
+      if (response.ok) {
+        const data = await response.json();
+        setDustbins(data);
+      } else {
+        toast.error("Failed to fetch dustbins");
+      }
+    } catch (error) {
+      console.error("Error fetching dustbins:", error);
       toast.error("Failed to fetch dustbins");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (session?.user) fetchDustbins();
@@ -105,6 +111,13 @@ export default function DevicesPage() {
     }
   }, []);
 
+  // Memoize expensive calculations
+  const dustbinStats = useMemo(() => ({
+    total: dustbins.length,
+    active: dustbins.filter(d => d.isActive).length,
+    highFill: dustbins.filter(d => d.fillLevel >= 75).length,
+  }), [dustbins]);
+
   if (loading) {
     return (
       <div className="p-6 animate-pulse space-y-6">
@@ -138,41 +151,14 @@ export default function DevicesPage() {
           </Button>
           <Button
             onClick={() => {
-              if (atLimit) {
-                toast.error(`Max ${limits.maxBins} bins on ${PLAN_LABELS[plan]}.`);
-                router.push("/pricing");
-                return;
-              }
               router.push("/devices/add");
             }}
           >
-            {atLimit ? <Lock className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-            {atLimit ? "Upgrade to Add More" : "Add Dustbin"}
+            <Plus className="h-4 w-4 mr-2" />
+            Add Dustbin
           </Button>
         </div>
       </div>
-
-      {/* Plan limit warning */}
-      {atLimit && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-          <Lock className="h-5 w-5 text-amber-600 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              Bin limit reached ({limits.maxBins} bins on {PLAN_LABELS[plan]})
-            </p>
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              Upgrade to Standard or Enterprise plan to add more dustbins.
-            </p>
-          </div>
-          <Button
-            size="sm"
-            onClick={() => router.push("/pricing")}
-            className="bg-amber-500 hover:bg-amber-600 text-white border-0"
-          >
-            Upgrade
-          </Button>
-        </div>
-      )}
 
       {/* Empty state */}
       {dustbins.length === 0 ? (
@@ -208,7 +194,7 @@ export default function DevicesPage() {
                       <Badge variant={dustbin.type === "wet" ? "default" : "secondary"}>
                         {dustbin.type.toUpperCase()}
                       </Badge>
-                      <Badge variant={dustbin.isActive ? "success" : "destructive"}>
+                      <Badge className={dustbin.isActive ? "bg-green-500 hover:bg-green-600 text-white border-0" : "bg-red-500 hover:bg-red-600 text-white border-0"}>
                         {dustbin.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </div>

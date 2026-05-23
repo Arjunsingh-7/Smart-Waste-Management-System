@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       const searchCondition = or(
         like(dustbins.name, `%${search}%`),
         like(dustbins.locationName, `%${search}%`)
-      );
+      ) as any;
       conditions.push(searchCondition);
     }
 

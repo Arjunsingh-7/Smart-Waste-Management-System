@@ -78,7 +78,11 @@ export default function LoginForm() {
       });
 
       if (error?.code) {
-        toast.error("Invalid email or password. Please make sure you have registered an account and try again.");
+        if (error.code === "EMAIL_NOT_VERIFIED") {
+          toast.error("Your email is not verified yet. Please check your inbox and verify your email to log in.");
+        } else {
+          toast.error("Invalid email or password. Please make sure you have registered an account and try again.");
+        }
         setIsLoading(false);
         return;
       }

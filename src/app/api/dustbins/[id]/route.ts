@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication check
@@ -18,7 +18,7 @@ export async function GET(
       );
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validate ID is a valid integer
     if (!id || isNaN(parseInt(id))) {

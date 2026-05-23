@@ -35,12 +35,49 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: false, // TEMPORARILY DISABLED until email delivery is fixed
+  },
+
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "ORG_ADMIN",
+      },
+    },
+  },
+
+  // Removed SUPER_ADMIN detection and assignment. All new users are ORG_ADMIN by default.
+
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      console.log("[auth] Sending verification email to:", user.email, "with URL:", url);
+      
+      const { sendVerificationEmail } = await import("@/lib/email");
+      
+      try {
+        const result = await sendVerificationEmail(user.email, url);
+        
+        if (!result.success) {
+          console.error("[auth] Failed to send verification email:", result.error);
+          throw new Error(`Failed to send verification email: ${result.error}`);
+        }
+        
+        console.log("[auth] Verification email sent successfully:", result.data?.id);
+      } catch (error) {
+        console.error("[auth] Error in sendVerificationEmail:", error);
+        throw error;
+      }
+    },
+    sendOnSignUp: true,
   },
 
   plugins: [bearer()],
 
   trustedOrigins: [
     "http://localhost:3000",
+    "http://localhost:3003",
     "http://localhost:3001",
     "http://localhost:3002",
     "https://smartwastesite.vercel.app",

@@ -4,12 +4,14 @@ import { useSession, authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  User, Mail, LogOut, Phone, Building2, Crown, Calendar, Shield, MapPin,
+  User, Mail, LogOut, Phone, Building2, Calendar, Shield, MapPin,
   Edit, Lock, Cpu, TrendingUp, Bell, Moon, Sun, Check, X, ChevronRight, MoreVertical,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { usePlan, PLAN_LABELS } from "@/lib/hooks/usePlan";
 import { useTheme } from "@/components/ThemeProvider";
+import EditProfileDialog from "@/components/myaccount/EditProfileDialog";
+import ChangePasswordDialog from "@/components/myaccount/ChangePasswordDialog";
 
 interface UserProfile {
   organizationName: string;
@@ -23,7 +25,6 @@ const QUICK_ACTIONS = [
   { icon: <Edit className="w-5 h-5" />, label: "Edit Profile", desc: "Update your personal information", href: "#", color: "bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" },
   { icon: <Lock className="w-5 h-5" />, label: "Change Password", desc: "Update your account password", href: "#", color: "bg-purple-500/10 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400" },
   { icon: <Cpu className="w-5 h-5" />, label: "Manage Devices", desc: "View and manage your smart bins", href: "/devices", color: "bg-cyan-500/10 text-cyan-600 dark:bg-cyan-500/20 dark:text-cyan-400" },
-  { icon: <Crown className="w-5 h-5" />, label: "Upgrade Plan", desc: "Get more features and higher limits", href: "/pricing", color: "bg-yellow-500/10 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400" },
   { icon: <Bell className="w-5 h-5" />, label: "Notification Settings", desc: "Manage your alert preferences", href: "#", color: "bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400" },
 ];
 
@@ -41,21 +42,45 @@ export default function MyAccountPage() {
   const { theme, setTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [changePwdOpen, setChangePwdOpen] = useState(false);
   const [dustbinCount, setDustbinCount] = useState(0);
   const [emailNotif, setEmailNotif] = useState(true);
   const [smsNotif, setSmsNotif] = useState(false);
   const [pushNotif, setPushNotif] = useState(true);
 
+  // refs for preferences must be declared unconditionally to preserve Hook order
+  const preferencesRef = React.useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (!session?.user?.id) return;
-    Promise.all([
-      fetch(`/api/user-profile/${session.user.id}`).then((r) => r.ok ? r.json() : null),
-      fetch("/api/dustbins?is_active=1", { headers: { Authorization: `Bearer ${localStorage.getItem("bearer_token")}` } })
-        .then((r) => r.ok ? r.json() : []),
-    ]).then(([prof, bins]) => {
-      if (prof) setProfile(prof);
-      setDustbinCount(bins.length);
-    });
+    
+    const fetchData = async () => {
+      const token = localStorage.getItem("bearer_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      try {
+        // Fetch all data in parallel for better performance
+        const [profileRes, dustbinsRes] = await Promise.all([
+          fetch(`/api/user-profile/${session.user.id}`, { headers }),
+          fetch("/api/dustbins?is_active=1", { headers })
+        ]);
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          setProfile(profileData);
+        }
+
+        if (dustbinsRes.ok) {
+          const dustbinsData = await dustbinsRes.json();
+          setDustbinCount(dustbinsData.length);
+        }
+      } catch (error) {
+        console.error("Failed to fetch account data:", error);
+      }
+    };
+
+    fetchData();
   }, [session?.user?.id]);
 
   const handleSignOut = async () => {
@@ -97,6 +122,10 @@ export default function MyAccountPage() {
     { label: "Location Details", done: false },
   ];
 
+  const openPreferences = () => {
+    preferencesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
@@ -124,7 +153,7 @@ export default function MyAccountPage() {
         <div className="lg:col-span-1 space-y-6">
 
           {/* Profile card */}
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div ref={preferencesRef} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <div className="flex items-start gap-4 mb-5">
               <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-2xl ring-4 ring-emerald-500/10 flex-shrink-0">
                 {session.user.name?.[0]?.toUpperCase() ?? "U"}
@@ -226,17 +255,11 @@ export default function MyAccountPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <Crown className="w-3.5 h-3.5" />
+                  <Shield className="w-3.5 h-3.5" />
                   Current Plan
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground">{PLAN_LABELS[plan]}</span>
-                  <button
-                    onClick={() => router.push("/pricing")}
-                    className="px-2 py-0.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors"
-                  >
-                    Upgrade Plan
-                  </button>
                 </div>
               </div>
               <div>
@@ -266,24 +289,30 @@ export default function MyAccountPage() {
           {/* Quick Actions */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-semibold mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {QUICK_ACTIONS.map((action) => (
-                <button
-                  key={action.label}
-                  onClick={() => action.href !== "#" && router.push(action.href)}
-                  className="group flex flex-col items-start gap-2 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-accent transition-all text-left"
-                >
-                  <div className={`w-10 h-10 rounded-xl ${action.color} flex items-center justify-center`}>
-                    {action.icon}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">{action.label}</p>
-                    <p className="text-xs text-muted-foreground leading-tight">{action.desc}</p>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors ml-auto -mt-2" />
-                </button>
-              ))}
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                {QUICK_ACTIONS.map((action) => {
+                  const handleClick = () => {
+                    if (action.label === 'Edit Profile') return setEditOpen(true);
+                    if (action.label === 'Change Password') return setChangePwdOpen(true);
+                    if (action.label === 'Notification Settings') return openPreferences();
+                    if (action.href && action.href !== '#') return router.push(action.href);
+                  };
+
+                  return (
+                    <button
+                      key={action.label}
+                      onClick={handleClick}
+                      className="group transform hover:-translate-y-1 transition-all p-4 rounded-2xl border border-white/6 bg-card/30 hover:shadow-lg hover:border-emerald-400/30 text-left"
+                    >
+                      <div className={`w-10 h-10 rounded-xl ${action.color} flex items-center justify-center mb-2`}>{action.icon}</div>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{action.label}</p>
+                        <p className="text-xs text-muted-foreground leading-tight">{action.desc}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
           </div>
 
         </div>
@@ -390,6 +419,9 @@ export default function MyAccountPage() {
 
         </div>
       </div>
+      {/* Modals */}
+      <EditProfileDialog open={editOpen} onOpenChange={setEditOpen} initialProfile={{...profile, name: session.user.name}} userId={session.user.id} onSaved={(u) => { setProfile((p) => ({ ...(p || {}), ...u })); }} />
+      <ChangePasswordDialog open={changePwdOpen} onOpenChange={setChangePwdOpen} userEmail={session.user.email} />
     </div>
   );
 }

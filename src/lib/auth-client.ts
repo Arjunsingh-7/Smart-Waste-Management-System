@@ -1,10 +1,16 @@
 "use client"
 import { createAuthClient } from "better-auth/react"
+import { inferAdditionalFields } from "better-auth/client/plugins"
 import { useEffect, useState } from "react"
+import type { auth } from "./auth"
 
 export const authClient = createAuthClient({
    baseURL: typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_SITE_URL,
-  fetchOptions: {
+   plugins: [
+      inferAdditionalFields<typeof auth>()
+   ],
+   fetchOptions: {
+     credentials: 'include',
       headers: {
         Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem("bearer_token") : ""}`,
       },
@@ -17,7 +23,7 @@ export const authClient = createAuthClient({
             localStorage.setItem("bearer_token", tokenPart);
           }
       }
-  }
+   }
 });
 
 type SessionData = ReturnType<typeof authClient.useSession>

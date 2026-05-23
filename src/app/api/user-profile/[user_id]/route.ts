@@ -5,10 +5,10 @@ import { eq } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { user_id: string } }
+  { params }: { params: Promise<{ user_id: string }> }
 ) {
   try {
-    const { user_id } = params;
+    const { user_id } = await params;
 
     // Validate user_id is provided and non-empty
     if (!user_id || user_id.trim() === '') {

@@ -47,7 +47,18 @@ export async function GET(request: NextRequest) {
       .where(and(...conditions))
       .orderBy(desc(analytics.date));
 
-    return NextResponse.json(results, { status: 200 });
+    // Enrich analytics with latest dustbin wet/dry values when available
+    const enriched = await Promise.all(results.map(async (row: any) => {
+      try {
+        const dbDustbin = await db.select().from(dustbins).where(eq(dustbins.id, row.dustbinId)).limit(1);
+        const d = dbDustbin?.[0];
+        return { ...row, currentWetLevel: d?.wetLevel ?? null, currentDryLevel: d?.dryLevel ?? null };
+      } catch (e) {
+        return { ...row };
+      }
+    }));
+
+    return NextResponse.json(enriched, { status: 200 });
   } catch (error) {
     console.error('GET analytics error:', error);
     return NextResponse.json(

@@ -14,6 +14,10 @@ interface Dustbin {
   longitude: string;
   fillLevel: number;
   status: string;
+  wetLevel?: number;
+  dryLevel?: number;
+  wetStatus?: string;
+  dryStatus?: string;
   isActive: boolean;
   lastCollectionDate?: string;
   nextCollectionDate?: string;
@@ -27,8 +31,14 @@ interface DustbinListProps {
 const formatDate = (d?: string) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A";
 
-const fillColor = (level: number) =>
-  level >= 75 ? "text-red-500" : level >= 50 ? "text-amber-500" : "text-green-500";
+const fillColor = (level: number, type: 'wet' | 'dry') =>
+  level >= 75
+    ? "text-red-500"
+    : level >= 50
+    ? "text-amber-500"
+    : type === 'wet'
+    ? "text-sky-500"
+    : "text-green-500";
 
 const fillLabel = (level: number) =>
   level >= 75 ? "Needs Collection" : level >= 50 ? "Half Full" : level >= 25 ? "Quarter Full" : "Empty";
@@ -38,9 +48,12 @@ const fillBadgeVariant = (level: number): any =>
 
 // Memoized individual row — only re-renders when its own data changes
 const DustbinRow = memo(function DustbinRow({ dustbin }: { dustbin: Dustbin }) {
+  const wet = dustbin.wetLevel ?? 0;
+  const dry = dustbin.dryLevel ?? 0;
+
   return (
     <div className="glass p-5 rounded-xl border hover:shadow-md transition-all">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
           <div className="flex items-start justify-between">
             <div>
@@ -54,21 +67,44 @@ const DustbinRow = memo(function DustbinRow({ dustbin }: { dustbin: Dustbin }) {
               <Badge variant={dustbin.type === "wet" ? "default" : "secondary"} className="text-xs">
                 {dustbin.type.toUpperCase()}
               </Badge>
-              <Badge variant={fillBadgeVariant(dustbin.fillLevel)} className="text-xs">
-                {fillLabel(dustbin.fillLevel)}
+              <Badge variant={fillBadgeVariant(Math.max(wet, dry))} className="text-xs">
+                {fillLabel(Math.max(wet, dry))}
               </Badge>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Fill Level</span>
-              <span className={`font-bold ${fillColor(dustbin.fillLevel)}`}>{dustbin.fillLevel}%</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Wet compartment (Blue) */}
+            <div className="p-3 rounded-lg bg-gradient-to-b from-sky-50/30 to-white/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Wet Waste</p>
+                  <p className="font-semibold text-sm">{dustbin.wetStatus ?? 'empty'}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`font-bold ${fillColor(wet, 'wet')}`}>{wet}%</p>
+                </div>
+              </div>
+              <div className="mt-2">
+                <Progress value={wet} className={`h-2 [&>div]:bg-sky-500`} />
+              </div>
             </div>
-            <Progress
-              value={dustbin.fillLevel}
-              className={`h-2 ${dustbin.fillLevel >= 75 ? "[&>div]:bg-red-500" : dustbin.fillLevel >= 50 ? "[&>div]:bg-amber-500" : "[&>div]:bg-green-500"}`}
-            />
+
+            {/* Dry compartment (Green) */}
+            <div className="p-3 rounded-lg bg-gradient-to-b from-emerald-50/30 to-white/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Dry Waste</p>
+                  <p className="font-semibold text-sm">{dustbin.dryStatus ?? 'empty'}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`font-bold ${fillColor(dry, 'dry')}`}>{dry}%</p>
+                </div>
+              </div>
+              <div className="mt-2">
+                <Progress value={dry} className={`h-2 [&>div]:bg-emerald-500`} />
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-1">

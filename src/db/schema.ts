@@ -9,6 +9,7 @@ export const user = sqliteTable("user", {
     .$defaultFn(() => false)
     .notNull(),
   image: text("image"),
+  role: text("role").$type<"ORG_ADMIN">().notNull().default("ORG_ADMIN"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),
@@ -75,6 +76,7 @@ export const userProfile = sqliteTable('user_profile', {
   category: text('category').notNull(),
   mobileNumber: text('mobile_number').notNull(),
   plan: text('plan').notNull().default('free'), // "free" | "standard" | "enterprise"
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -91,7 +93,12 @@ export const dustbins = sqliteTable('dustbins', {
   latitude: text('latitude').notNull(), // Using text for real values in SQLite
   longitude: text('longitude').notNull(),
   fillLevel: integer('fill_level').notNull().default(0), // 0-100 percentage
-  status: text('status').notNull().default('empty'), // "empty", "25", "50", "75", "full"
+  // Dual-compartment support (wet/dry)
+  wetLevel: integer('wet_level').notNull().default(0),
+  dryLevel: integer('dry_level').notNull().default(0),
+  wetStatus: text('wet_status').notNull().default('empty'),
+  dryStatus: text('dry_status').notNull().default('empty'),
+  status: text('status').notNull().default('empty'), // legacy single-compartment status (kept for backwards compatibility)
   lastCollectionDate: text('last_collection_date'),
   nextCollectionDate: text('next_collection_date'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
@@ -101,6 +108,10 @@ export const dustbins = sqliteTable('dustbins', {
   userIdIdx: index('dustbins_user_id_idx').on(table.userId),
   userIdIsActiveIdx: index('dustbins_user_id_is_active_idx').on(table.userId, table.isActive),
   statusIdx: index('dustbins_status_idx').on(table.status),
+  wetLevelIdx: index('dustbins_wet_level_idx').on(table.wetLevel),
+  dryLevelIdx: index('dustbins_dry_level_idx').on(table.dryLevel),
+  wetStatusIdx: index('dustbins_wet_status_idx').on(table.wetStatus),
+  dryStatusIdx: index('dustbins_dry_status_idx').on(table.dryStatus),
   typeIdx: index('dustbins_type_idx').on(table.type),
   fillLevelIdx: index('dustbins_fill_level_idx').on(table.fillLevel),
 }));

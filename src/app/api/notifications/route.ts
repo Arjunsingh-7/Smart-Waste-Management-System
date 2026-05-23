@@ -17,19 +17,15 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isReadParam = searchParams.get('is_read');
 
-    let query = db.select().from(notifications).where(eq(notifications.userId, user.id));
-
+    const conditions = [eq(notifications.userId, user.id)];
     if (isReadParam !== null) {
-      const isReadValue = isReadParam === '1';
-      query = query.where(
-        and(
-          eq(notifications.userId, user.id),
-          eq(notifications.isRead, isReadValue)
-        )
-      );
+      conditions.push(eq(notifications.isRead, isReadParam === '1'));
     }
 
-    const results = await query.orderBy(desc(notifications.createdAt));
+    const results = await db.select()
+      .from(notifications)
+      .where(and(...conditions))
+      .orderBy(desc(notifications.createdAt));
 
     return NextResponse.json(results, { status: 200 });
   } catch (error) {

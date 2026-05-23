@@ -4,8 +4,8 @@ import { useSession } from '@/lib/auth-client';
 export type Plan = 'free' | 'standard' | 'enterprise';
 
 export const PLAN_LIMITS = {
-  free:       { maxBins: 3,  analytics: false, liveMonitoring: false },
-  standard:   { maxBins: 50, analytics: true,  liveMonitoring: true  },
+  free:       { maxBins: Infinity, analytics: true, liveMonitoring: true }, // REMOVED ALL RESTRICTIONS - Full demo access
+  standard:   { maxBins: Infinity, analytics: true, liveMonitoring: true },
   enterprise: { maxBins: Infinity, analytics: true, liveMonitoring: true },
 } as const;
 

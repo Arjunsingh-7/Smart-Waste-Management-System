@@ -90,6 +90,7 @@ export const Header = memo(function Header() {
   // Memoize navigation links based on auth state
   // While session is loading, use the appropriate links based on current path
   // to avoid flickering between public/dashboard nav
+  const isSuperAdminPath = false;
   const isDashboardPath = pathname?.startsWith("/dashboard") ||
     pathname?.startsWith("/devices") ||
     pathname?.startsWith("/analytics") ||
@@ -98,6 +99,8 @@ export const Header = memo(function Header() {
     pathname?.startsWith("/myaccount");
 
   const navLinks = useMemo(() => {
+    // No Super Admin UI; show dashboard or public nav
+
     // During loading, infer nav from path to prevent flicker
     const showDashboardNav = isLoggedIn || (isPending && isDashboardPath);
     return showDashboardNav
@@ -114,7 +117,7 @@ export const Header = memo(function Header() {
           { name: "Hardware Guide", href: "/hardware-guide" },
           { name: "Support", href: "/support" },
         ];
-  }, [isLoggedIn, isPending, isDashboardPath]);
+  }, [isLoggedIn, isPending, isDashboardPath, isSuperAdminPath, session?.user?.role]);
 
   // Memoize active link check
   const isActiveLink = useCallback((href: string) => {
@@ -132,8 +135,10 @@ export const Header = memo(function Header() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo */}
-          <Link 
-            href={(isLoggedIn || (isPending && isDashboardPath)) ? "/dashboard" : "/"} 
+            <Link 
+            href={
+              (isLoggedIn || (isPending && isDashboardPath)) ? "/dashboard" : "/"
+            } 
             className="flex items-center gap-2 sm:gap-3 relative z-[10000] hover:scale-105 transition-transform"
             prefetch={true}
           >
@@ -162,9 +167,11 @@ export const Header = memo(function Header() {
             
             {isLoggedIn ? (
               <Link href="/myaccount" prefetch={false}>
-                <Button className="text-sm bg-primary hover:bg-primary/90 transition-all hover:scale-105">My Account</Button>
+                <Button className="text-sm bg-primary hover:bg-primary/90 transition-all hover:scale-105">
+                  My Account
+                </Button>
               </Link>
-            ) : isPending && isDashboardPath ? (
+            ) : (isPending && isDashboardPath) ? (
               // Skeleton placeholder while loading on dashboard routes
               <div className="h-9 w-28 bg-muted animate-pulse rounded-md" />
             ) : (
@@ -212,9 +219,11 @@ export const Header = memo(function Header() {
               <div className="flex flex-col gap-2 pt-2 border-t border-border">
                 {isLoggedIn ? (
                   <Link href="/myaccount" onClick={handleMenuClose} prefetch={false}>
-                    <Button className="w-full bg-primary hover:bg-primary/90">My Account</Button>
+                    <Button className="w-full bg-primary hover:bg-primary/90">
+                      My Account
+                    </Button>
                   </Link>
-                ) : isPending && isDashboardPath ? (
+                ) : (isPending && isDashboardPath) ? (
                   <div className="h-9 w-full bg-muted animate-pulse rounded-md" />
                 ) : (
                   <>

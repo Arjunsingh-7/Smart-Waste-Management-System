@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Navigation, MapPin, Layers, X } from "lucide-react";
@@ -25,6 +25,7 @@ interface Dustbin {
   fillLevel: number;
   status: string;
   isActive: boolean;
+  organizationName?: string;
 }
 
 interface DustbinMapProps {
@@ -67,23 +68,17 @@ const MAP_LAYERS: Record<string, MapLayer> = {
   },
 };
 
-// Custom marker icons based on fill level and type
 const getMarkerIcon = (fillLevel: number, type: string) => {
   let color: string;
-  let bgColor: string;
   
   if (fillLevel >= 75) {
-    color = type === "wet" ? "#dc2626" : "#16a34a"; // Red for wet, green for dry at 75%+
-    bgColor = type === "wet" ? "#fef2f2" : "#f0fdf4";
+    color = type === "wet" ? "#dc2626" : "#16a34a";
   } else if (fillLevel >= 50) {
-    color = "#f59e0b"; // Orange for 50-74%
-    bgColor = "#fffbeb";
+    color = "#f59e0b";
   } else if (fillLevel >= 25) {
-    color = "#eab308"; // Yellow for 25-49%
-    bgColor = "#fefce8";
+    color = "#eab308";
   } else {
-    color = "#22c55e"; // Green for 0-24%
-    bgColor = "#f0fdf4";
+    color = "#22c55e";
   }
 
   const iconType = type === "wet" ? "💧" : "🗑️";
@@ -109,7 +104,6 @@ const getMarkerIcon = (fillLevel: number, type: string) => {
   });
 };
 
-// Component to auto-fit bounds
 function MapBounds({ dustbins }: { dustbins: Dustbin[] }) {
   const map = useMap();
 
@@ -125,7 +119,6 @@ function MapBounds({ dustbins }: { dustbins: Dustbin[] }) {
   return null;
 }
 
-// Search and location controls component
 function MapControls({
   onSearch,
   onCurrentLocation,
@@ -145,13 +138,12 @@ function MapControls({
 }) {
   return (
     <>
-      {/* Search Bar */}
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] w-full max-w-2xl px-4">
         <div className="flex gap-2 items-center bg-background/95 backdrop-blur-sm rounded-lg border shadow-lg p-2">
           <Search className="h-5 w-5 text-muted-foreground ml-2" />
           <Input
             type="text"
-            placeholder="Search cities, landmarks, addresses (e.g., 'Mumbai', 'India Gate', 'Connaught Place')..."
+            placeholder="Search cities, landmarks, addresses (e.g., 'Mumbai', 'India Gate')..."
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={(e) => {
@@ -178,9 +170,7 @@ function MapControls({
         </div>
       </div>
 
-      {/* Map Controls - Right Side */}
       <div className="absolute top-24 right-4 z-[1000] flex flex-col gap-2">
-        {/* Current Location Button */}
         <Button
           onClick={onCurrentLocation}
           size="icon"
@@ -190,7 +180,6 @@ function MapControls({
           <Navigation className="h-5 w-5" />
         </Button>
 
-        {/* Layer Selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -219,21 +208,17 @@ function MapControls({
   );
 }
 
-// Component to handle map interactions
 function MapInteractions({
   searchQuery,
   onSearchComplete,
   goToLocation,
-  currentLayer,
 }: {
   searchQuery: string;
   onSearchComplete: () => void;
   goToLocation: boolean;
-  currentLayer: keyof typeof MAP_LAYERS;
 }) {
   const map = useMap();
 
-  // Handle search
   useEffect(() => {
     if (searchQuery) {
       const geocodeSearch = async () => {
@@ -250,7 +235,6 @@ function MapInteractions({
             map.setView([parseFloat(lat), parseFloat(lon)], 15);
             toast.success(`Found: ${display_name}`);
             
-            // Add temporary marker
             const marker = L.marker([parseFloat(lat), parseFloat(lon)], {
               icon: L.divIcon({
                 html: `<div style="background: #ef4444; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white;"></div>`,
@@ -263,7 +247,6 @@ function MapInteractions({
               .bindPopup(`<b>${display_name}</b>`)
               .openPopup();
 
-            // Remove marker after 5 seconds
             setTimeout(() => {
               map.removeLayer(marker);
             }, 5000);
@@ -281,7 +264,6 @@ function MapInteractions({
     }
   }, [searchQuery, map, onSearchComplete]);
 
-  // Handle current location
   useEffect(() => {
     if (goToLocation) {
       if ("geolocation" in navigator) {
@@ -292,7 +274,6 @@ function MapInteractions({
             const { latitude, longitude } = position.coords;
             map.setView([latitude, longitude], 15);
             
-            // Add marker for current location
             const marker = L.marker([latitude, longitude], {
               icon: L.divIcon({
                 html: `<div style="background: #3b82f6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);"></div>`,
@@ -307,7 +288,6 @@ function MapInteractions({
 
             toast.success("Location found!");
 
-            // Remove marker after 5 seconds
             setTimeout(() => {
               map.removeLayer(marker);
             }, 5000);
@@ -327,7 +307,7 @@ function MapInteractions({
   return null;
 }
 
-export default function DustbinMap({ dustbins }: DustbinMapProps) {
+export default function SuperAdminMap({ dustbins }: DustbinMapProps) {
   const [searchValue, setSearchValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [goToLocation, setGoToLocation] = useState(false);
@@ -357,18 +337,17 @@ export default function DustbinMap({ dustbins }: DustbinMapProps) {
 
   if (dustbins.length === 0) {
     return (
-      <div className="h-[600px] flex items-center justify-center bg-muted rounded-lg">
+      <div className="h-[500px] flex items-center justify-center bg-muted rounded-2xl border border-dashed border-border">
         <div className="text-center">
-          <p className="text-muted-foreground">No dustbins to display</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Add your first dustbin to see it on the map
+          <p className="text-muted-foreground font-medium">No smart dustbins registered yet</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Registered bins from all organizations will be plotted here.
           </p>
         </div>
       </div>
     );
   }
 
-  // Default center (Mumbai coordinates)
   const defaultCenter: [number, number] = [19.0760, 72.8777];
   const center: [number, number] = dustbins.length > 0
     ? [parseFloat(dustbins[0].latitude), parseFloat(dustbins[0].longitude)]
@@ -377,7 +356,7 @@ export default function DustbinMap({ dustbins }: DustbinMapProps) {
   const selectedLayer = MAP_LAYERS[currentLayer];
 
   return (
-    <div className="h-[600px] rounded-lg overflow-hidden border relative">
+    <div className="h-[500px] rounded-2xl overflow-hidden border relative shadow-md">
       <MapContainer
         center={center}
         zoom={13}
@@ -400,7 +379,6 @@ export default function DustbinMap({ dustbins }: DustbinMapProps) {
           searchQuery={searchQuery}
           onSearchComplete={handleSearchComplete}
           goToLocation={goToLocation}
-          currentLayer={currentLayer}
         />
         {dustbins.map((dustbin) => (
           <Marker
@@ -409,9 +387,12 @@ export default function DustbinMap({ dustbins }: DustbinMapProps) {
             icon={getMarkerIcon(dustbin.fillLevel, dustbin.type)}
           >
             <Popup>
-              <div className="p-2 min-w-[200px]">
-                <h3 className="font-bold text-lg mb-2">{dustbin.name}</h3>
-                <div className="space-y-1 text-sm">
+              <div className="p-2 min-w-[220px]">
+                <h3 className="font-bold text-base mb-1.5 text-slate-800 dark:text-slate-100">{dustbin.name}</h3>
+                <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                  <p>
+                    <span className="font-semibold">Org:</span> <strong className="text-[#16C47F]">{dustbin.organizationName || "N/A"}</strong>
+                  </p>
                   <p>
                     <span className="font-semibold">Location:</span> {dustbin.locationName}
                   </p>
@@ -439,9 +420,7 @@ export default function DustbinMap({ dustbins }: DustbinMapProps) {
                         ? "🚨 Full - Collection Needed"
                         : dustbin.fillLevel >= 50
                         ? "⚠️ Half Full"
-                        : dustbin.fillLevel >= 25
-                        ? "📊 Quarter Full"
-                        : "✅ Empty"}
+                        : "✅ Normal"}
                     </span>
                   </p>
                 </div>

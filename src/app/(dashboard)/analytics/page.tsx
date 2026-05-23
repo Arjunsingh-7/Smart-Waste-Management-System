@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSession } from "@/lib/auth-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, Package, Activity, Calendar, Lock } from "lucide-react";
+import { TrendingUp, Package, Activity, Calendar } from "lucide-react";
 import { toast } from "sonner";
-import { usePlan, PLAN_LABELS } from "@/lib/hooks/usePlan";
-import { useRouter } from "next/navigation";
+import { usePlan } from "@/lib/hooks/usePlan";
 
 interface AnalyticsSummary {
   totalWasteKg: number;
@@ -36,7 +35,6 @@ interface Dustbin {
 export default function AnalyticsPage() {
   const { data: session } = useSession();
   const { plan, limits, planLoading } = usePlan();
-  const router = useRouter();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [dailyData, setDailyData] = useState<DailyAnalytics[]>([]);
   const [dustbins, setDustbins] = useState<Dustbin[]>([]);
@@ -47,20 +45,36 @@ export default function AnalyticsPage() {
   }, [session]);
 
   const fetchAnalytics = async () => {
+    if (!session?.user?.id) return;
+    
     try {
       setLoading(true);
       const token = localStorage.getItem("bearer_token");
-      const userId = session?.user?.id;
+      const headers = { Authorization: `Bearer ${token}` };
 
+      // Fetch all analytics data in parallel for better performance
       const [summaryRes, dailyRes, dustbinsRes] = await Promise.all([
-        fetch(`/api/analytics/summary?user_id=${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/analytics", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/dustbins?is_active=1", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/analytics/summary?user_id=${session.user.id}`, { headers }),
+        fetch("/api/analytics", { headers }),
+        fetch("/api/dustbins?is_active=1", { headers }),
       ]);
 
-      if (summaryRes.ok) setSummary(await summaryRes.json());
-      if (dailyRes.ok) setDailyData(await dailyRes.json());
-      if (dustbinsRes.ok) setDustbins(await dustbinsRes.json());
+      // Process responses with proper error handling
+      const results = await Promise.allSettled([
+        summaryRes.ok ? summaryRes.json() : null,
+        dailyRes.ok ? dailyRes.json() : [],
+        dustbinsRes.ok ? dustbinsRes.json() : []
+      ]);
+
+      if (results[0].status === 'fulfilled' && results[0].value) {
+        setSummary(results[0].value);
+      }
+      if (results[1].status === 'fulfilled') {
+        setDailyData(results[1].value);
+      }
+      if (results[2].status === 'fulfilled') {
+        setDustbins(results[2].value);
+      }
     } catch (error) {
       console.error("Error fetching analytics:", error);
       toast.error("Failed to fetch analytics data");
@@ -68,6 +82,39 @@ export default function AnalyticsPage() {
       setLoading(false);
     }
   };
+
+  // Memoize expensive chart data calculations
+  // NOTE: hooks must be called unconditionally above any early returns
+  const chartData = useMemo(() => {
+    if (!dailyData || !dustbins) {
+      return { wasteOverTimeData: [], collectionsData: [], binTypeData: [], fillLevelDistribution: [] };
+    }
+
+    const wasteOverTimeData = dailyData.map((item) => ({
+      date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      waste: parseFloat(item.wasteCollectedKg),
+      fillLevel: item.fillLevelAvg,
+    })).reverse();
+
+    const collectionsData = dailyData.map((item) => ({
+      date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      collections: item.collectionsCount,
+    })).reverse();
+
+    const binTypeData = [
+      { name: "Wet Bins", value: dustbins.filter(b => b.type === "wet").length },
+      { name: "Dry Bins", value: dustbins.filter(b => b.type === "dry").length },
+    ];
+
+    const fillLevelDistribution = [
+      { name: "Empty (0-25%)", value: dustbins.filter(b => b.fillLevel < 25).length },
+      { name: "Quarter (25-50%)", value: dustbins.filter(b => b.fillLevel >= 25 && b.fillLevel < 50).length },
+      { name: "Half (50-75%)", value: dustbins.filter(b => b.fillLevel >= 50 && b.fillLevel < 75).length },
+      { name: "Full (75-100%)", value: dustbins.filter(b => b.fillLevel >= 75).length },
+    ];
+
+    return { wasteOverTimeData, collectionsData, binTypeData, fillLevelDistribution };
+  }, [dailyData, dustbins]);
 
   if (loading || planLoading) {
     return (
@@ -85,54 +132,7 @@ export default function AnalyticsPage() {
 
   if (!session?.user) return null;
 
-  // Free plan gate
-  if (!limits.analytics) {
-    return (
-      <div className="flex items-center justify-center min-h-full p-6">
-        <div className="text-center max-w-md">
-          <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-6">
-            <Lock className="w-10 h-10 text-amber-500" />
-          </div>
-          <h2 className="text-2xl font-bold mb-3">Analytics Locked</h2>
-          <p className="text-muted-foreground mb-2">
-            Analytics & Reports are available on <span className="font-semibold text-primary">Standard</span> and <span className="font-semibold text-primary">Enterprise</span> plans.
-          </p>
-          <p className="text-sm text-muted-foreground mb-6">
-            You are currently on the <span className="font-semibold">{PLAN_LABELS[plan]}</span>.
-          </p>
-          <button
-            onClick={() => router.push("/pricing")}
-            className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
-          >
-            Upgrade Plan →
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const wasteOverTimeData = dailyData.map((item) => ({
-    date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    waste: parseFloat(item.wasteCollectedKg),
-    fillLevel: item.fillLevelAvg,
-  })).reverse();
-
-  const collectionsData = dailyData.map((item) => ({
-    date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    collections: item.collectionsCount,
-  })).reverse();
-
-  const binTypeData = [
-    { name: "Wet Bins", value: dustbins.filter(b => b.type === "wet").length },
-    { name: "Dry Bins", value: dustbins.filter(b => b.type === "dry").length },
-  ];
-
-  const fillLevelDistribution = [
-    { name: "Empty (0-25%)", value: dustbins.filter(b => b.fillLevel < 25).length },
-    { name: "Quarter (25-50%)", value: dustbins.filter(b => b.fillLevel >= 25 && b.fillLevel < 50).length },
-    { name: "Half (50-75%)", value: dustbins.filter(b => b.fillLevel >= 50 && b.fillLevel < 75).length },
-    { name: "Full (75-100%)", value: dustbins.filter(b => b.fillLevel >= 75).length },
-  ];
+  const { wasteOverTimeData, collectionsData, binTypeData, fillLevelDistribution } = chartData;
 
   const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
   const TYPE_COLORS = ["#22c55e", "#3b82f6"];
