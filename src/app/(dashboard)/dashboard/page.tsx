@@ -5,7 +5,10 @@ import { useSession } from "@/lib/auth-client";
 import { MapPin, List, Bell, TrendingUp, Trash2, AlertCircle, RefreshCw, X, Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import EnvironmentalImpactBanner from "@/components/dashboard/EnvironmentalImpactBanner";
+const EnvironmentalImpactBanner = dynamic(() => import("@/components/dashboard/EnvironmentalImpactBanner"), {
+  ssr: false,
+  loading: () => <div className="h-36 bg-muted animate-pulse rounded-2xl" />,
+});
 
 // Auto-refresh every 30 seconds
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -91,51 +94,26 @@ const STAT_CARDS = [
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const [dustbins, setDustbins] = useState<Dustbin[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, revalidate, mutate } = require("@/lib/hooks/useDashboardData").useDashboardData(session?.user?.id);
   const [activeTab, setActiveTab] = useState<"map" | "list" | "notifications">("map");
   const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchDashboardData = useCallback(async () => {
-    if (!session?.user) return;
-    try {
-      setLoading(true);
-      const token = localStorage.getItem("bearer_token");
-      const [dRes, nRes] = await Promise.all([
-        fetch("/api/dustbins?is_active=1", { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' }),
-        fetch("/api/notifications?is_read=0", { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' }),
-      ]);
-      if (dRes.ok) setDustbins(await dRes.json());
-      if (nRes.ok) setNotifications(await nRes.json());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [session]);
-
-  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
+  // expose helper to fetch fresh
+  const fetchDashboardData = revalidate;
 
   // Auto-refresh every 30 seconds + countdown display
   useEffect(() => {
     if (!session?.user) return;
 
     const startAutoRefresh = () => {
-      // Reset countdown
       setCountdown(AUTO_REFRESH_INTERVAL / 1000);
 
-      // Countdown ticker
       countdownRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) return AUTO_REFRESH_INTERVAL / 1000;
-          return prev - 1;
-        });
+        setCountdown((prev) => (prev <= 1 ? AUTO_REFRESH_INTERVAL / 1000 : prev - 1));
       }, 1000);
 
-      // Data refresh
       intervalRef.current = setInterval(() => {
         fetchDashboardData();
         setCountdown(AUTO_REFRESH_INTERVAL / 1000);
@@ -173,6 +151,9 @@ export default function DashboardPage() {
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     }
   };
+
+  const dustbins = data?.dustbins ?? [];
+  const notifications = data?.notifications ?? [];
 
   const totalDustbins = useMemo(() => dustbins.length, [dustbins]);
   const binsRequiringCollection = useMemo(() => dustbins.filter((b) => b.fillLevel >= 75).length, [dustbins]);

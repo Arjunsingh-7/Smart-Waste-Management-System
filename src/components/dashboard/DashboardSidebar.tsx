@@ -40,6 +40,7 @@ const NavItems = memo(function NavItems({
   pathname: string;
   onNavigate: () => void;
 }) {
+  const router = useRouter();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname?.startsWith(href);
 
@@ -53,6 +54,7 @@ const NavItems = memo(function NavItems({
             href={href}
             onClick={onNavigate}
             prefetch={true}
+            onMouseEnter={() => router.prefetch(href)}
             className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
               active
                 ? "bg-white text-emerald-700 shadow-md"

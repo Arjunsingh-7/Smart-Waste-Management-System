@@ -3,7 +3,7 @@
 import React from "react";
 import { Trash2, CloudOff, Repeat, Server } from "lucide-react";
 
-export default function EnvironmentalImpactBanner({
+function EnvironmentalImpactBanner({
   wasteCollected = 0,
   co2Reduced = 0,
   collectionsCompleted = 0,
@@ -117,3 +117,5 @@ export default function EnvironmentalImpactBanner({
     </section>
   );
 }
+
+  export default React.memo(EnvironmentalImpactBanner);

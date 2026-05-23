@@ -35,7 +35,7 @@ const buttonVariants = cva(
   }
 )
 
-function Button({
+function ButtonImpl({
   className,
   variant,
   size,
@@ -55,5 +55,7 @@ function Button({
     />
   )
 }
+
+const Button = React.memo(ButtonImpl) as typeof ButtonImpl;
 
 export { Button, buttonVariants }
