@@ -7,12 +7,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Navigation, MapPin, Layers, X } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import LayerSwitcher from "@/components/dashboard/LayerSwitcher";
 import { toast } from "sonner";
 
 interface Dustbin {
@@ -136,6 +131,7 @@ function MapControls({
   currentLayer: keyof typeof MAP_LAYERS;
   onLayerChange: (layer: keyof typeof MAP_LAYERS) => void;
 }) {
+  const [showLayers, setShowLayers] = useState(false);
   return (
     <>
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] w-full max-w-2xl px-4">
@@ -179,30 +175,23 @@ function MapControls({
         >
           <Navigation className="h-5 w-5" />
         </Button>
+        <Button
+          onClick={() => setShowLayers((s) => !s)}
+          size="icon"
+          className="h-12 w-12 rounded-full shadow-lg bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800/95 ring-1 ring-border"
+          title="Change map layer"
+        >
+          <Layers className="h-5 w-5" />
+        </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="icon"
-              className="h-12 w-12 rounded-full shadow-lg bg-background hover:bg-accent"
-              title="Change map layer"
-            >
-              <Layers className="h-5 w-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            {Object.entries(MAP_LAYERS).map(([key, layer]) => (
-              <DropdownMenuItem
-                key={key}
-                onClick={() => onLayerChange(key as keyof typeof MAP_LAYERS)}
-                className={currentLayer === key ? "bg-accent" : ""}
-              >
-                <MapPin className="h-4 w-4 mr-2" />
-                {layer.name}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {showLayers && (
+          <LayerSwitcher
+            layers={MAP_LAYERS}
+            current={currentLayer}
+            onChange={(k) => { onLayerChange(k as keyof typeof MAP_LAYERS); setShowLayers(false); }}
+            onClose={() => setShowLayers(false)}
+          />
+        )}
       </div>
     </>
   );

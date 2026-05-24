@@ -10,8 +10,6 @@ const EnvironmentalImpactBanner = dynamic(() => import("@/components/dashboard/E
   loading: () => <div className="h-36 bg-muted animate-pulse rounded-2xl" />,
 });
 
-// Auto-refresh every 30 seconds
-const AUTO_REFRESH_INTERVAL = 30_000;
 
 const DustbinMap = dynamic(() => import("@/components/dashboard/DustbinMap"), {
   ssr: false,
@@ -96,35 +94,47 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const { data, loading, revalidate, mutate } = require("@/lib/hooks/useDashboardData").useDashboardData(session?.user?.id);
   const [activeTab, setActiveTab] = useState<"map" | "list" | "notifications">("map");
-  const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // expose helper to fetch fresh
   const fetchDashboardData = revalidate;
 
-  // Auto-refresh every 30 seconds + countdown display
+  // Refresh when a new dustbin/device is added elsewhere (BroadcastChannel/storage)
   useEffect(() => {
     if (!session?.user) return;
 
-    const startAutoRefresh = () => {
-      setCountdown(AUTO_REFRESH_INTERVAL / 1000);
-
-      countdownRef.current = setInterval(() => {
-        setCountdown((prev) => (prev <= 1 ? AUTO_REFRESH_INTERVAL / 1000 : prev - 1));
-      }, 1000);
-
-      intervalRef.current = setInterval(() => {
-        fetchDashboardData();
-        setCountdown(AUTO_REFRESH_INTERVAL / 1000);
-      }, AUTO_REFRESH_INTERVAL);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "dustbin_added") fetchDashboardData();
     };
 
-    startAutoRefresh();
+    const handleMessage = (ev: MessageEvent) => {
+      try {
+        const d = ev?.data;
+        if (d?.type === "dustbin_added") fetchDashboardData();
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    // BroadcastChannel for same-origin tabs
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        bc = new BroadcastChannel("wastewizard");
+        bc.addEventListener("message", handleMessage as any);
+      }
+    } catch (err) {
+      bc = null;
+    }
+
+    window.addEventListener("storage", handleStorage);
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      window.removeEventListener("storage", handleStorage);
+      if (bc) {
+        bc.removeEventListener("message", handleMessage as any);
+        bc.close();
+      }
     };
   }, [session?.user, fetchDashboardData]);
 
@@ -220,12 +230,12 @@ export default function DashboardPage() {
           </p>
         </div>
         <button
-          onClick={() => { fetchDashboardData(); setCountdown(AUTO_REFRESH_INTERVAL / 1000); }}
+          onClick={() => { fetchDashboardData(); }}
           disabled={loading}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-muted hover:bg-accent transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Refreshing..." : `Refresh (${countdown}s)`}
+          {loading ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 

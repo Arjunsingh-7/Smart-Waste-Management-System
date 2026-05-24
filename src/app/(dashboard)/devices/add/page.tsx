@@ -61,6 +61,18 @@ export default function AddDustbinPage() {
         body: JSON.stringify(formData),
       });
       if (response.ok) {
+        const created = await response.json().catch(() => null);
+        try {
+          if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+            const bc = new BroadcastChannel("wastewizard");
+            bc.postMessage({ type: "dustbin_added", id: created?.id ?? Date.now() });
+            bc.close();
+          } else {
+            localStorage.setItem("dustbin_added", String(created?.id ?? Date.now()));
+          }
+        } catch (err) {
+          // ignore
+        }
         toast.success("Dustbin added successfully!");
         router.push("/devices");
       } else {

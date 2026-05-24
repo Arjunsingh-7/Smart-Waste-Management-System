@@ -11,9 +11,7 @@ import {
   Search, Navigation, MapPin, X, Layers, Maximize2, Minimize2,
   CircleDot, StopCircle, CheckCircle2,
 } from "lucide-react";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import LayerSwitcher from "@/components/dashboard/LayerSwitcher";
 import { toast } from "sonner";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -362,6 +360,7 @@ export default function MapLocationPicker({
   }, []);
 
   const layer = MAP_LAYERS[currentLayer];
+  const [showLayers, setShowLayers] = useState(false);
 
   return (
     <div className={isFullScreen ? "fixed inset-0 z-[9999] bg-background flex flex-col" : "h-full w-full flex flex-col"}>
@@ -409,31 +408,7 @@ export default function MapLocationPicker({
                 Search
               </button>
             </div>
-
-            {/* Autocomplete dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-[2000] overflow-hidden">
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onMouseDown={() => handleSelectSuggestion(s)}
-                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-accent text-left transition-colors border-b border-border/50 last:border-0"
-                  >
-                    <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${s.source === "custom" ? "text-emerald-500" : "text-muted-foreground"}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
-                      {s.detail && <p className="text-xs text-muted-foreground truncate">{s.detail}</p>}
-                    </div>
-                    {s.source === "custom" && (
-                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded flex-shrink-0">
-                        Local
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+          )}
           </div>
 
           {/* Action buttons row */}
@@ -470,28 +445,23 @@ export default function MapLocationPicker({
                 <span className="hidden sm:inline">{isLiveTracking ? "Stop" : "Live"}</span>
               </button>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors"
-                  >
-                    <Layers className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Layer</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44 z-[10000]">
-                  {Object.entries(MAP_LAYERS).map(([key, l]) => (
-                    <DropdownMenuItem
-                      key={key}
-                      onClick={() => setCurrentLayer(key as keyof typeof MAP_LAYERS)}
-                      className={currentLayer === key ? "bg-accent font-semibold" : ""}
-                    >
-                      {l.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <button
+                type="button"
+                onClick={() => setShowLayers((s) => !s)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors"
+                title="Change map layer"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Layer</span>
+              </button>
+              {showLayers && (
+                <LayerSwitcher
+                  layers={MAP_LAYERS}
+                  current={currentLayer}
+                  onChange={(k) => { setCurrentLayer(k as keyof typeof MAP_LAYERS); setShowLayers(false); }}
+                  onClose={() => setShowLayers(false)}
+                />
+              )}
 
               <button
                 type="button"
