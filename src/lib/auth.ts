@@ -33,6 +33,12 @@ export const auth = betterAuth({
     provider: "sqlite",
   }),
 
+  baseURL:
+    process.env.BETTER_AUTH_URL ||
+    process.env.NEXT_PUBLIC_BETTER_AUTH_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined),
+  secret: process.env.BETTER_AUTH_SECRET,
+
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false, // TEMPORARILY DISABLED until email delivery is fixed

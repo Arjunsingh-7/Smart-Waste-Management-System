@@ -10,9 +10,14 @@ export const authClient = createAuthClient({
       inferAdditionalFields<typeof auth>()
    ],
    fetchOptions: {
-     credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem("bearer_token") : ""}`,
+      credentials: 'include',
+      onRequest: (ctx) => {
+         if (typeof window !== 'undefined') {
+            const token = localStorage.getItem("bearer_token");
+            if (token && token !== "null" && token !== "undefined") {
+               ctx.headers.set("Authorization", `Bearer ${token}`);
+            }
+         }
       },
       onSuccess: (ctx) => {
           const authToken = ctx.response.headers.get("set-auth-token")
@@ -41,15 +46,18 @@ export function useSession(): SessionData {
 
    const fetchSession = async () => {
       try {
+         const token = typeof window !== 'undefined' ? localStorage.getItem("bearer_token") : null;
+         const hasToken = token && token !== "null" && token !== "undefined";
+
          const res = await authClient.getSession({
-            fetchOptions: {
+            fetchOptions: hasToken ? {
                auth: {
                   type: "Bearer",
-                  token: typeof window !== 'undefined' ? localStorage.getItem("bearer_token") || "" : "",
+                  token: token,
                },
-            },
+            } : {},
          });
-         setSession(res.data);
+         setSession(res?.data || null);
          setError(null);
       } catch (err) {
          setSession(null);
