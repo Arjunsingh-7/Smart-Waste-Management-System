@@ -408,7 +408,6 @@ export default function MapLocationPicker({
                 Search
               </button>
             </div>
-          )}
           </div>
 
           {/* Action buttons row */}

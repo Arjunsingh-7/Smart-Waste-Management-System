@@ -145,7 +145,7 @@ export default function DashboardPage() {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      mutate();
     } else {
       toast.error("Failed to delete notification");
     }
@@ -158,7 +158,7 @@ export default function DashboardPage() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      mutate();
     }
   };
 
@@ -166,11 +166,11 @@ export default function DashboardPage() {
   const notifications = data?.notifications ?? [];
 
   const totalDustbins = useMemo(() => dustbins.length, [dustbins]);
-  const binsRequiringCollection = useMemo(() => dustbins.filter((b) => b.fillLevel >= 75).length, [dustbins]);
-  const binsRequiringCollectionWet = useMemo(() => dustbins.filter((b) => (b.wetLevel ?? 0) >= 75).length, [dustbins]);
-  const binsRequiringCollectionDry = useMemo(() => dustbins.filter((b) => (b.dryLevel ?? 0) >= 75).length, [dustbins]);
+  const binsRequiringCollection = useMemo(() => dustbins.filter((b: any) => b.fillLevel >= 75).length, [dustbins]);
+  const binsRequiringCollectionWet = useMemo(() => dustbins.filter((b: any) => (b.wetLevel ?? 0) >= 75).length, [dustbins]);
+  const binsRequiringCollectionDry = useMemo(() => dustbins.filter((b: any) => (b.dryLevel ?? 0) >= 75).length, [dustbins]);
   const avgFillLevel = useMemo(() =>
-    dustbins.length > 0 ? Math.round(dustbins.reduce((s, b) => s + (b.fillLevel ?? 0), 0) / dustbins.length) : 0,
+    dustbins.length > 0 ? Math.round(dustbins.reduce((s: number, b: any) => s + (b.fillLevel ?? 0), 0) / dustbins.length) : 0,
   [dustbins]);
   const unreadNotifications = useMemo(() => notifications.length, [notifications]);
 
@@ -334,7 +334,7 @@ export default function DashboardPage() {
                   <p className="text-sm">No unread notifications</p>
                 </div>
               ) : (
-                notifications.map((n) => (
+                notifications.map((n: any) => (
                   <div
                     key={n.id}
                     className="flex items-start gap-3 p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"

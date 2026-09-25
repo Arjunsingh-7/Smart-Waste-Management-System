@@ -30,8 +30,15 @@ export async function middleware(request: NextRequest) {
   const isProtected = protectedRoutes.some((r) => pathname.startsWith(r));
 
   if (isProtected) {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
+    try {
+      const session = await auth.api.getSession({ headers: await headers() });
+      if (!session) {
+        const url = new URL("/login", request.url);
+        url.searchParams.set("redirect", pathname);
+        return NextResponse.redirect(url);
+      }
+    } catch (err) {
+      console.error("[Middleware Auth Error]:", err);
       const url = new URL("/login", request.url);
       url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);

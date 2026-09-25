@@ -28,15 +28,26 @@ import { NextRequest } from "next/server";
 import { headers } from "next/headers";
 import { db } from "@/db";
 
+const getBaseUrl = () => {
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  if (process.env.BETTER_AUTH_URL && !process.env.BETTER_AUTH_URL.includes("localhost")) {
+    return process.env.BETTER_AUTH_URL;
+  }
+  return (
+    process.env.BETTER_AUTH_URL ||
+    process.env.NEXT_PUBLIC_BETTER_AUTH_URL ||
+    "http://localhost:3000"
+  );
+};
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "sqlite",
   }),
 
-  baseURL:
-    process.env.BETTER_AUTH_URL ||
-    process.env.NEXT_PUBLIC_BETTER_AUTH_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined),
+  baseURL: getBaseUrl(),
   secret: process.env.BETTER_AUTH_SECRET,
 
   emailAndPassword: {
@@ -86,8 +97,10 @@ export const auth = betterAuth({
     "http://localhost:3003",
     "http://localhost:3001",
     "http://localhost:3002",
+    "https://*.vercel.app",
     "https://smartwastesite.vercel.app",
     "https://waste-wizard-smart-waste-management.vercel.app",
+    ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
     process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? "",
     process.env.NEXT_PUBLIC_SITE_URL ?? "",
   ].filter(Boolean),

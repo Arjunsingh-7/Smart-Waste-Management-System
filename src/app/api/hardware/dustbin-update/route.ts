@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { dustbins, notifications, user as users } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { sendEmail, createWelcomeEmailTemplate } from '@/lib/email';
 
 /**
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
           .select()
           .from(notifications)
           .where(and(eq(notifications.dustbinId, dustbinId), eq(notifications.userId, dustbin.userId)))
-          .orderBy(notifications.id, 'desc')
+          .orderBy(desc(notifications.id))
           .limit(5);
 
         const alreadyAlerted = existing.some((n) => n.message?.includes(`${c.label} waste`));
