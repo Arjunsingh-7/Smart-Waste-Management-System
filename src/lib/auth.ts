@@ -48,7 +48,7 @@ export const auth = betterAuth({
   }),
 
   baseURL: getBaseUrl(),
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret: process.env.BETTER_AUTH_SECRET || "gFzzAcwwUTied38pyzqHh7TSCJVdGVCbQZeC3DRRKXs=",
 
   emailAndPassword: {
     enabled: true,
