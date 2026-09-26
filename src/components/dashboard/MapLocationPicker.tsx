@@ -43,25 +43,20 @@ const CUSTOM_LOCATIONS: Suggestion[] = [
 
 /* ── Map tile layers ────────────────────────────────────────────────────── */
 const MAP_LAYERS = {
-  carto: {
-    name: "🗺️ Street (Fast)",
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  street: {
+    name: "🗺️ Street",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   },
   satellite: {
     name: "🛰️ Satellite",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "Tiles &copy; Esri",
   },
-  dark: {
-    name: "🌑 Dark",
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-  },
-  osm: {
-    name: "📍 OpenStreetMap",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  terrain: {
+    name: "⛰️ Terrain",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
   },
 };
 
@@ -161,7 +156,7 @@ export default function MapLocationPicker({
 
   const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
   const [goToLocation, setGoToLocation] = useState(false);
-  const [currentLayer, setCurrentLayer] = useState<keyof typeof MAP_LAYERS>("carto");
+  const [currentLayer, setCurrentLayer] = useState<keyof typeof MAP_LAYERS>("street");
 
   const [selectedPos, setSelectedPos] = useState<[number, number] | null>(
     latitude && longitude ? [parseFloat(latitude), parseFloat(longitude)] : null
@@ -319,6 +314,8 @@ export default function MapLocationPicker({
       (pos) => {
         const { latitude, longitude } = pos.coords;
         setLivePos([latitude, longitude]);
+        setSelectedPos([latitude, longitude]);
+        onLocationSelect(latitude.toFixed(6), longitude.toFixed(6));
         const now = Date.now();
         if (now - lastGeocodeRef.current > 5000) {
           lastGeocodeRef.current = now;
